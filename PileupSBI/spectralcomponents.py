@@ -34,7 +34,7 @@ class PowerLaw(SpectralComponent):
     Basic power law spectrum. Params alpha + beta.
     """
     def get_rate(self, alpha, beta):
-        return alpha * torch.Tensor(E_BAR) ** -beta
+        return np.array(alpha * torch.Tensor(E_BAR) ** -beta)
 
 
 class GaussianEmissionLine(SpectralComponent):
@@ -76,6 +76,7 @@ if __name__ == '__main__':
     self = Spectrum(c1, c2)
     from matplotlib import pyplot as plt
     plt.plot(self.get_rate(c1args, c2args))
+    a = np.zeros_like(self.get_rate(c1args, c2args))
     """
     plt.plot(self.spectrum)
     plt.show()
