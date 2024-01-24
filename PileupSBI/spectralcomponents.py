@@ -1,10 +1,8 @@
 import numpy as np
 import torch
 
-# Globals
-ARF = np.loadtxt('txt_inputs/arf.txt') # Effective area
-#ARF = np.concatenate((np.zeros(30), ARF))
-ENERGY_BINS = np.loadtxt('txt_inputs/energy_bins.txt') # Lower bound of bins
+from utils.pdfs import _normal_pdf
+from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
 #ENERGY_BINS = np.concatenate((np.zeros(30), ENERGY_BINS))
 
 BIN_WIDTH = ENERGY_BINS[1] - ENERGY_BINS[0]
@@ -13,9 +11,6 @@ E_BAR = ENERGY_BINS + BIN_WIDTH / 2
 # Pre-defined params (edit as needed)
 TIME_WIDTH = 3.2
 
-def _normal_pdf(x, mu, sigma):
-    return 1 / (sigma * np.sqrt(2 * np.pi)) * \
-        np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
 
 class SpectralComponent():
@@ -81,5 +76,4 @@ if __name__ == '__main__':
     plt.plot(self.spectrum)
     plt.show()
     plt.plot(self.rate)
-
     plt.show()"""
