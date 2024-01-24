@@ -59,7 +59,6 @@ class Spectrum():
             rate += component.get_rate(*component_params)
         self.spectrum = rate.copy()
         rate *= TIME_WIDTH * BIN_WIDTH * ARF
-        rate = np.concatenate((np.zeros(30), rate))
         return rate
 
 
