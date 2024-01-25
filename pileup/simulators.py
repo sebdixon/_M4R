@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from spectralcomponents import Spectrum, PowerLaw, GaussianEmissionLine
 from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
@@ -6,8 +7,6 @@ from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
 ARF = np.concatenate((np.zeros(30), ARF))
 
  # Prob photon arriving in bin j recorded in channel i
-RMF = (RMF.T / RMF.sum(axis=1)).T # Need to normalise RMF
-
 RMF = np.vstack((np.zeros((30, 1024)), RMF))
 
 TOTAL_CHANNELS = 1024
@@ -74,9 +73,11 @@ if __name__ == '__main__':
     spectrum = Spectrum(c1, c2)
     params = (c1args, c2args)
     start = time()
-    data = simulator(spectrum, 10000, params, pileup='bins')  
+    data = simulator(spectrum, 10000, params, pileup='channels')  
     print (time() - start)
     plt.hist(data[data>0], density=True, bins=30)
     rate = np.concatenate((np.zeros(30), spectrum.get_rate(*params))) @ RMF
     plt.plot(rate / np.sum(rate))
+
+
 

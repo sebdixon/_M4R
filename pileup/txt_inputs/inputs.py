@@ -1,5 +1,6 @@
 import numpy as np
 
-ARF = np.loadtxt('txt_inputs/arf.txt') # Effective area
-ENERGY_BINS = np.loadtxt('txt_inputs/energy_bins.txt')
-RMF = np.loadtxt('txt_inputs/rmf.txt')
+ARF = np.loadtxt('arf.txt') # Effective area
+ENERGY_BINS = np.loadtxt('energy_bins.txt')
+RMF = np.loadtxt('rmf.txt')
+RMF = (RMF.T / RMF.sum(axis=1)).T # Need to normalise RMF
