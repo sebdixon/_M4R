@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from utils.pdfs import _normal_pdf
-from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
+from inputs import RMF, ARF, ENERGY_BINS
 #ENERGY_BINS = np.concatenate((np.zeros(30), ENERGY_BINS))
 
 BIN_WIDTH = ENERGY_BINS[1] - ENERGY_BINS[0]
@@ -16,7 +16,6 @@ TIME_WIDTH = 3.2
 class SpectralComponent():
     """
     Base class from which other spectraL components inherit.
-    Stil considering the best way to implement this.
     """
     def __init__(self, *params):
         self.params = params
@@ -40,6 +39,38 @@ class GaussianEmissionLine(SpectralComponent):
     """
     def get_rate(self, power, mu, sigma):
         return power * _normal_pdf(E_BAR, mu, sigma)
+
+
+class BrokenPowerLaw(SpectralComponent):
+    """
+    Broken power law spectrum. Params alpha1, beta1, alpha2, beta2, break energy.
+    """
+    def get_rate(self, alpha1, beta1, alpha2, beta2, e_break):
+        return np.array(alpha1 * torch.Tensor(E_BAR[E_BAR < e_break]) ** -beta1) + np.array(alpha2 * torch.Tensor(E_BAR[E_BAR >= e_break]) ** -beta2)
+    
+
+class BlackBody(SpectralComponent):
+    """
+    Black body spectrum. Params T, normalization.
+    """
+    def get_rate(self, T, norm):
+        return norm * (8 * np.pi * np.array(E_BAR) ** 2) / (np.exp(E_BAR / T) - 1)
+    
+
+class Bremsstrahlung(SpectralComponent):
+    """
+    Bremsstrahlung spectrum. Params T, normalization.
+    """
+    def get_rate(self, T, norm):
+        return norm * np.array(E_BAR) ** -0.5 * np.exp(-E_BAR / T)
+
+
+class GaussianAbsorptionLine(SpectralComponent):
+    """
+    Absorption line centred at mu w std sigma.
+    """
+    def get_rate(self, power, mu, sigma):
+        return -power * _normal_pdf(E_BAR, mu, sigma)
 
 
 class Spectrum():

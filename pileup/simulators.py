@@ -1,15 +1,15 @@
 import numpy as np
-import torch
 
 from spectralcomponents import Spectrum, PowerLaw, GaussianEmissionLine
-from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
+from inputs import RMF, ARF, ENERGY_BINS
 
 ARF = np.concatenate((np.zeros(30), ARF))
 
  # Prob photon arriving in bin j recorded in channel i
 RMF = np.vstack((np.zeros((30, 1024)), RMF))
 
-TOTAL_CHANNELS = 1024
+TOTAL_CHANNELS, TOTAL_BINS = RMF.T.shape
+
 
 def simulator(spectrum: Spectrum, time_steps: int, params: tuple, pileup='bins'):
     """
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
     from time import time
     c1 = PowerLaw()
-    c1args = (0.2, 1)
+    c1args = (0.5, 1)
     c2 = GaussianEmissionLine()
     c2args = (0.1, 5, 0.05)
     spectrum = Spectrum(c1, c2)
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     start = time()
     data = simulator(spectrum, 10000, params, pileup='channels')  
     print (time() - start)
-    plt.hist(data[data>0], density=True, bins=30)
+    plt.hist(data[data>0], density=True, bins=40)
     rate = np.concatenate((np.zeros(30), spectrum.get_rate(*params))) @ RMF
     plt.plot(rate / np.sum(rate))
 

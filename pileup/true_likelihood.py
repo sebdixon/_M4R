@@ -1,11 +1,9 @@
 import numpy as np
-import pymc as pm
 
 from scipy import signal
 
-from txt_inputs.inputs import RMF
+from pileup.inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
-from utils.plot import hist_from_counts
 
 
 def true_likelihood(rate:np.ndarray):
@@ -30,8 +28,6 @@ def true_likelihood(rate:np.ndarray):
         last_lam_tild_conv = signal.fftconvolve(last_lam_tild_conv, lam_tild)
         lam_tild_conv[n] = last_lam_tild_conv[:m * 2 - 1]
         plt.plot(last_lam_tild_conv)
-        print (last_lam_tild_conv.shape)
-        #lam_tild_conv[n, :n] = 0
     plt.show()
     lam_tild_conv.shape
     v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
