@@ -1,37 +1,39 @@
 import numpy as np
-import sbi
+import torch
 from sbi.inference import SNPE, SNRE_C
 from sbi.utils import get_density_thresholder, RestrictedPrior
-from torch import Size
-from torch._C import Size
+from torch import Tensor
 from torch.distributions import Normal, Uniform
+from sbi.inference import SNPE, prepare_for_sbi, simulate_for_sbi
 
 
 # Useful priors
 class TruncatedGaussian(Normal):
     def __init__(self, loc, scale, low, high):
+        if not isinstance(loc, Tensor):
+            loc = Tensor([loc]) 
+        if not isinstance(scale, Tensor):   
+            scale = Tensor([scale])
         super().__init__(loc, scale)
         self.low = low
         self.high = high
     
-    def sample(self):
+    def sample(self, shape=1):
         sample =  super().sample()
-        if sample < self.low or sample > self.high:
+        if (sample < self.low).any() or (sample > self.high).any():
             return self.sample()
+        return sample
     
 
-def do_SNPE(prior, simulator, rounds, num_sims, x_o):
+def get_SNPE_posterior(prior, simulator):
+    simulator, prior = prepare_for_sbi(simulator, prior)
     inference = SNPE(prior)
-    proposal = prior
-    for _ in range(rounds):
-        theta = proposal.sample((num_sims,))
-        x = simulator(theta)
-        _ = inference.append_simulations(theta, x).train(force_first_round_loss=True)
-        posterior = inference.build_posterior().set_default_x(x_o)
 
-        accept_reject_fn = get_density_thresholder(posterior, quantile=1e-4)
-        proposal = RestrictedPrior(prior, accept_reject_fn, sample_with="rejection")
+    theta, x = simulate_for_sbi(simulator, proposal=prior, num_simulations=1000)
+    density_estimator = inference.append_simulations(theta, x).train()
+    posterior = inference.build_posterior(density_estimator)
     return posterior
+
 
 def do_contrastive_ratio(prior, simulator, num_sims, x_o):
     # Amortized inference
@@ -45,3 +47,9 @@ def do_contrastive_ratio(prior, simulator, num_sims, x_o):
     )
     posterior = inference.build_posterior().set_default_x(x_o)
     return posterior
+
+
+if __name__ == '__main__':
+    prior = TruncatedGaussian(torch.ones(2), torch.ones(2) * 10, 0, 1)
+    
+    
