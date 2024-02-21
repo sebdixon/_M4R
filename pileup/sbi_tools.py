@@ -3,15 +3,15 @@ import torch
 from sbi.inference import SNPE, SNRE_C
 from sbi.utils import get_density_thresholder, RestrictedPrior
 from torch import Tensor
-from torch.distributions import Normal, MultivariateNormal, Uniform
+from torch.distributions import Normal, MultivariateNormal, Uniform, Independent
 from sbi.inference import SNPE, prepare_for_sbi, simulate_for_sbi
 
 
 # Useful priors
-class TruncatedNormal(Normal):
+class TruncatedNormal(MultivariateNormal):
     # Not yet rely working
-    def __init__(self, loc, scale, low, high):
-        super().__init__(loc, scale)
+    def __init__(self, loc, covariance, low, high):
+        super().__init__(loc, covariance)
         self.low = low
         self.high = high
     
@@ -29,6 +29,22 @@ class TruncatedNormal(Normal):
             mask &= ~within_bounds
             
         return samples
+
+
+class BoxUniform(Independent):
+    def __init__(self, low: Tensor, high: Tensor, reinterpreted_batch_ndims: int = 1, device='cpu'):
+        super().__init__(
+                Uniform(
+                    low=torch.as_tensor(
+                        low, dtype=torch.float32, device=torch.device(device)
+                    ),
+                    high=torch.as_tensor(
+                        high, dtype=torch.float32, device=torch.device(device)
+                    ),
+                    validate_args=False,
+                ),
+                reinterpreted_batch_ndims,
+            )
 
 
 class SymmetricTruncatedNormal(Normal):

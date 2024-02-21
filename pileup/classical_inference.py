@@ -97,8 +97,8 @@ class TruePosterior:
         posterior_samples = np.zeros((num_samples, int(np.sum(len(mu) for mu in mu_init))))
         log_likelihood_current = self.compute_true_likelihood(mu_current, x0)
         for i in range(num_samples):
-            mu_proposal = self.prior.sample()
-            log_likelihood_proposal = self.compute_true_likelihood((tensor_to_tuple(mu_proposal),), x0)
+            mu_proposal = self.prior.sample() # torch.Tensor
+            log_likelihood_proposal = self.compute_true_likelihood((tensor_to_tuple(mu_proposal),), x0) # float = log_likelihood(tuple(tuple), np.array)
             log_likelihood_ratio = log_likelihood_proposal - log_likelihood_current
             log_prior_ratio = self.prior.log_prob(mu_proposal) - self.prior.log_prob(tuple_to_tensor(mu_current))
             log_acceptance_ratio = log_likelihood_ratio + log_prior_ratio
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     plt.legend()
 
     import torch
-    from sbi import utils
-    prior = utils.torchutils.BoxUniform(low=torch.tensor([0.01, 0.01]), high=torch.tensor([1, 1]))
+    from sbi_tools import BoxUniform
+    prior = BoxUniform(low=torch.tensor([0.01, 0.01]), high=torch.tensor([1, 1]))
     posterior = TruePosterior(prior, spectrum, simulator)
     posterior_samples = posterior.sample_posterior(data, 1000, ((0.5, 0.5),))
