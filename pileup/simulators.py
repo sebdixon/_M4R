@@ -11,56 +11,64 @@ RMF = np.vstack((np.zeros((30, 1024)), RMF))
 TOTAL_CHANNELS, TOTAL_BINS = RMF.T.shape
 
 
-def simulator(spectrum: Spectrum, time_steps: int, params: tuple, pileup='bins'):
-    """
-    Base simulator function for photon incidence.
-    """
-    rate = spectrum.get_rate(*params)
-    rate = np.concatenate((np.zeros(30), rate))
-    if pileup == 'bins':
-        return _simulate_bin_pileup(rate, time_steps)
-    elif pileup == 'channels':
-        return _simulate_channel_pileup(rate, time_steps)
-    else:
-        raise ValueError('pileup must be one of bins, channels')
+import numpy as np
 
+class Simulator:
+    def __init__(self, spectrum, time_steps, pileup='bins'):
+        self.spectrum = spectrum
+        self.time_steps = time_steps
+        self.pileup = pileup
+    
+    def __call__(self, params):
+        """
+        Call the simulator with a specified pileup type.
+        """
+        rate = self.spectrum.get_rate(*params)
+        rate = np.concatenate((np.zeros(30), rate))  # Assuming 30 is a specific requirement
+        
+        if self.pileup == 'bins':
+            return self._simulate_bin_pileup(rate)
+        elif self.pileup == 'channels':
+            return self._simulate_channel_pileup(rate)
+        else:
+            raise ValueError('pileup must be one of "bins", "channels"')
 
-def _simulate_bin_pileup(rate, time_steps):
-    """
-    Pileup happens in bin space. Can just dot rate with RMF.
-    """
-    rate = rate @ RMF
-    data = np.zeros(time_steps)
-    for time_step in range(time_steps):
-        channels = np.random.poisson(rate) # channel represents count in each channel
-        if np.sum(channels) == 0:
-            continue
-        total_channel = int(channels[channels >= 1] @ np.argwhere(channels >= 1))
-        if total_channel < TOTAL_CHANNELS:
-            data[time_step] = total_channel + 1
-    return data
+    def _simulate_bin_pileup(self, rate):
+        """
+        Simulate pileup in bin space.
+        """
+        data = np.zeros(self.time_steps)
+        total_rate = np.sum(rate)
+        rate /= total_rate
+        photon_counts = np.random.poisson(total_rate, self.time_steps)
+        for time_step, photon_count in enumerate(photon_counts):
+            bin_indices = np.nonzero(np.random.multinomial(photon_count, rate))[0] + 1
+            total_bin = np.sum(bin_indices) - 1
+            if total_bin >= TOTAL_BINS or total_bin < 0:
+                continue
+            data_t = np.random.multinomial(1, RMF[total_bin])
+            data[time_step] = np.nonzero(data_t)[0]
+        return data
 
-
-def _simulate_channel_pileup(rate, time_steps):
-    """
-    Pileup happens in channel space. Need to apply RMF to each
-    photon, then add indices to get pileup.
-    """
-    data = np.zeros(time_steps)
-    total_rate = np.sum(rate)
-    rate /= total_rate
-    photon_counts = np.random.poisson(total_rate, time_steps)
-    for time_step, photon_count in enumerate(photon_counts):
-        if photon_count == 0:
-            continue
-        bin_indices = np.nonzero(np.random.multinomial(photon_count, rate))[0]
-        total_channel = -1 # channel[i] corresponds to bin i
-        for bin_index in bin_indices:
-            channel = np.nonzero(np.random.multinomial(1, RMF[bin_index]))[0]
-            total_channel += channel[0] + 1 # 1 indexing
-        if total_channel < TOTAL_CHANNELS:
-            data[time_step] = total_channel + 1
-    return data
+    def _simulate_channel_pileup(self, rate):
+        """
+        Simulate pileup in channel space.
+        """
+        data = np.zeros(self.time_steps)
+        total_rate = np.sum(rate)
+        rate /= total_rate
+        photon_counts = np.random.poisson(total_rate, self.time_steps)
+        for time_step, photon_count in enumerate(photon_counts):
+            if photon_count == 0:
+                continue
+            bin_indices = np.nonzero(np.random.multinomial(photon_count, rate))[0]
+            total_channel = -1  # channel[i] corresponds to bin i
+            for bin_index in bin_indices:
+                channel = np.nonzero(np.random.multinomial(1, RMF[bin_index]))[0]
+                total_channel += channel[0] + 1  # 1 indexing
+            if total_channel < TOTAL_CHANNELS:
+                data[time_step] = total_channel + 1
+        return data
 
 
 if __name__ == '__main__':
@@ -73,7 +81,8 @@ if __name__ == '__main__':
     spectrum = Spectrum(c1, c2)
     params = (c1args, c2args)
     start = time()
-    data = simulator(spectrum, 10000, params, pileup='channels')  
+    simulator = Simulator(spectrum, 10000, pileup='channels')  
+    data = simulator(params)
     print (time() - start)
     plt.hist(data[data>0], density=True, bins=40)
     rate = np.concatenate((np.zeros(30), spectrum.get_rate(*params))) @ RMF
