@@ -31,8 +31,41 @@ def true_likelihood(rate:np.ndarray):
     plt.show()
     lam_tild_conv.shape
     v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
-    v
     return v
+
+
+class DirectPosterior:
+    def __init__(self, prior, spectrum, simulator):
+        self.prior = prior
+        self.spectrum = spectrum
+        self.simulator = simulator
+
+    def compute_true_likelihood(self, params, x0):
+        """
+        Compute the true likelihood of observing x0 given parameters.
+        """
+        rate = self.spectrum.get_rate(*params)
+        likelihood = true_likelihood(rate)
+        log_likelihood = np.log(likelihood)
+        likelihood_of_x0 = 0
+        for x in x0:
+            likelihood_of_x0 += log_likelihood[int(x)]
+        return likelihood_of_x0
+
+    def sample_posterior(self, x0, num_samples, mu_init):
+        """
+        Sample from the approximated true posterior given observations x0.
+        """
+        mu_current = mu_init
+        posterior_samples = np.zeros((num_samples, len(mu_init)))
+        for i in range(num_samples):
+            mu_proposal = self.prior.sample()
+            likelihood_ratio = self.compute_true_likelihood(mu_proposal, x0) / self.compute_true_likelihood(mu_current, x0)
+            acceptance_ratio = likelihood_ratio * (self.prior.pdf(mu_proposal) / self.prior.pdf(mu_current))
+            if np.random.rand() < acceptance_ratio:
+                mu_current = mu_proposal
+            posterior_samples[i] = mu_current
+        return posterior_samples
 
 
 
