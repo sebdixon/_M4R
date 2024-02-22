@@ -5,13 +5,11 @@ from inputs import RMF, ARF, ENERGY_BINS
 
 ARF = np.concatenate((np.zeros(30), ARF))
 
- # Prob photon arriving in bin j recorded in channel i
+# Prob photon arriving in bin j recorded in channel i
 RMF = np.vstack((np.zeros((30, 1024)), RMF))
 
-TOTAL_CHANNELS, TOTAL_BINS = RMF.T.shape
+TOTAL_BINS, TOTAL_CHANNELS = RMF.shape
 
-
-import numpy as np
 
 class Simulator:
     def __init__(self, spectrum, time_steps, pileup='bins'):
@@ -33,6 +31,7 @@ class Simulator:
         else:
             raise ValueError('pileup must be one of "bins", "channels"')
 
+
     def _simulate_bin_pileup(self, rate):
         """
         Simulate pileup in bin space.
@@ -50,10 +49,8 @@ class Simulator:
             data[time_step] = np.nonzero(data_t)[0]
         return data
 
+
     def _simulate_channel_pileup(self, rate):
-        """
-        Simulate pileup in channel space.
-        """
         data = np.zeros(self.time_steps)
         total_rate = np.sum(rate)
         rate /= total_rate
@@ -69,15 +66,22 @@ class Simulator:
             if total_channel < TOTAL_CHANNELS:
                 data[time_step] = total_channel + 1
         return data
-
+    
+    def _simulate_channel_pileup1(self, rate):
+        """
+        New loop-free simulator.
+        """
+        channel_indices = np.random.poisson(rate @ RMF, (self.time_steps, TOTAL_CHANNELS)) @ np.arange(1, TOTAL_CHANNELS + 1)
+        channel_indices[channel_indices > TOTAL_CHANNELS] = 1
+        return channel_indices - 1
 
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
     from time import time
     c1 = PowerLaw()
-    c1args = (0.5, 1)
+    c1args = (0.05, 1)
     c2 = GaussianEmissionLine()
-    c2args = (0.1, 5, 0.05)
+    c2args = (0.0, 5, 0.05)
     spectrum = Spectrum(c1, c2)
     params = (c1args, c2args)
     start = time()

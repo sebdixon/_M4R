@@ -77,7 +77,7 @@ class TruePosterior:
         self.prior = prior
         self.spectrum = spectrum
         self.simulator = simulator
-    
+
     def compute_true_likelihood(self, params, x0):
         """
         Compute the log likelihood of observing x0 given parameters.
@@ -92,6 +92,7 @@ class TruePosterior:
     def sample_posterior(self, x0, num_samples, mu_init):
         """
         Sample from the approximated true posterior given observations x0 using log likelihoods.
+        Implements a Metropolis-Hastings proposal to sample with MCMC.
         """
         mu_current = mu_init
         posterior_samples = np.zeros((num_samples, int(np.sum(len(mu) for mu in mu_init))))
