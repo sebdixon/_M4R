@@ -16,14 +16,14 @@ class Simulator:
         self.spectrum = spectrum
         self.time_steps = time_steps
         self.pileup = pileup
-    
+
     def __call__(self, params):
         """
         Call the simulator with a specified pileup type.
         """
         rate = self.spectrum.get_rate(*params)
         rate = np.concatenate((np.zeros(30), rate))  # Assuming 30 is a specific requirement
-        
+
         if self.pileup == 'bins':
             return self._simulate_bin_pileup(rate)
         elif self.pileup == 'channels':
@@ -50,7 +50,7 @@ class Simulator:
         return data
 
 
-    def _simulate_channel_pileup(self, rate):
+    def _simulate_channel_pileup1(self, rate):
         data = np.zeros(self.time_steps)
         total_rate = np.sum(rate)
         rate /= total_rate
@@ -67,10 +67,7 @@ class Simulator:
                 data[time_step] = total_channel + 1
         return data
     
-    def _simulate_channel_pileup1(self, rate):
-        """
-        New loop-free simulator.
-        """
+    def _simulate_channel_pileup(self, rate):
         channel_indices = np.random.poisson(rate @ RMF, (self.time_steps, TOTAL_CHANNELS)) @ np.arange(1, TOTAL_CHANNELS + 1)
         channel_indices[channel_indices > TOTAL_CHANNELS] = 1
         return channel_indices - 1
@@ -91,6 +88,3 @@ if __name__ == '__main__':
     plt.hist(data[data>0], density=True, bins=40)
     rate = np.concatenate((np.zeros(30), spectrum.get_rate(*params))) @ RMF
     plt.plot(rate / np.sum(rate))
-
-
-

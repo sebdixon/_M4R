@@ -39,6 +39,14 @@ class GaussianEmissionLine(SpectralComponent):
     """
     def get_rate(self, power, mu, sigma):
         return power * _normal_pdf(E_BAR, mu, sigma)
+    
+
+class DeltaEmissionLine(SpectralComponent):
+    """
+    Delta function emission line at energy mu.
+    """
+    def get_rate(self, power, mu):
+        return power * np.where(E_BAR == mu, 1, 0)
 
 
 class BrokenPowerLaw(SpectralComponent):
@@ -86,7 +94,6 @@ class Spectrum():
     def get_rate(self, *params):
         rate = np.zeros_like(E_BAR)
         for component, component_params in zip(self.components, params):
-            print (component, component_params)
             rate += component.get_rate(*component_params)
         self.spectrum = rate.copy()
         rate *= TIME_WIDTH * BIN_WIDTH * ARF
@@ -96,8 +103,8 @@ class Spectrum():
 if __name__ == '__main__':
     c1 = PowerLaw()
     c1args = (1,1)
-    c2 = GaussianEmissionLine()
-    c2args = (0.1, 5, 0.05)
+    c2 = DeltaEmissionLine()
+    c2args = (1, 5.005)
     self = Spectrum(c1, c2)
     from matplotlib import pyplot as plt
     plt.plot(self.get_rate(c1args, c2args))

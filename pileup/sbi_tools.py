@@ -64,7 +64,7 @@ def get_SNPE_posterior(prior, simulator, **args):
     return posterior
 
 
-def do_contrastive_ratio(prior, simulator, num_sims, x_o):
+def get_SNRE_posterior(prior, simulator, num_sims, x_o):
     # Amortized inference
     # This doesn't yet work
     inference = SNRE_C(prior)
@@ -75,5 +75,5 @@ def do_contrastive_ratio(prior, simulator, num_sims, x_o):
         num_classes=5,
         gamma=1.0,
     )
-    posterior = inference.build_posterior().set_default_x(x_o)
+    posterior = inference.build_posterior()
     return posterior
