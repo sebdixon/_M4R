@@ -89,6 +89,24 @@ class TruePosterior:
             log_likelihood_of_x0 += log_likelihood[int(x)]
         return log_likelihood_of_x0
 
+
+    def compute_posterior(self, params, x0):
+        """
+        Compute the posterior of the parameters given observations x0.
+        """
+        prior_prob = self.prior.log_prob(tuple_to_tensor(params))
+        likelihood = self.compute_true_likelihood(params, x0)
+        return prior_prob + likelihood
+    
+    def compute_grid_posterior(self, x0, grid):
+        """
+        Compute the posterior of the parameters given observations x0.
+        """
+        posterior = np.zeros(grid.shape)
+        for i, mu in enumerate(grid):
+            posterior[i] = self.compute_posterior(mu, x0)
+        return posterior
+
     def sample_posterior(self, x0, num_samples, mu_init):
         """
         Sample from the approximated true posterior given observations x0 using log likelihoods.
