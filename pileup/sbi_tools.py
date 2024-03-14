@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 from sbi.inference import SNPE, SNRE_C
-from sbi.utils import get_density_thresholder, RestrictedPrior
+from sbi.utils import posterior_nn
 from torch import Tensor
 from torch.distributions import Normal, MultivariateNormal, Uniform, Independent
 from sbi.inference import SNPE, prepare_for_sbi, simulate_for_sbi
+from sbi.inference import SNRE_B
 
 
 # Useful priors
@@ -55,25 +56,23 @@ class SymmetricTruncatedNormal(Normal):
         return torch.abs(super().sample(sample_shape))
 
 
-def get_SNPE_posterior(prior, simulator, **args):
+def get_SNPE_posterior(prior, simulator, embedding_net, theta=None, x=None, **args):
     simulator, prior = prepare_for_sbi(simulator, prior)
-    inference = SNPE(prior)
-    theta, x = simulate_for_sbi(simulator, proposal=prior, **args)
+    neural_posterior = posterior_nn(
+    model="maf", embedding_net=embedding_net, hidden_features=10, num_transforms=2)
+    inference = SNPE(prior=prior, density_estimator=neural_posterior)
+    if theta is None or x is None:
+        theta, x = simulate_for_sbi(simulator, proposal=prior, **args)
     density_estimator = inference.append_simulations(theta, x).train()
     posterior = inference.build_posterior(density_estimator)
     return posterior
 
 
-def get_SNRE_posterior(prior, simulator, num_sims, x_o):
-    # Amortized inference
-    # This doesn't yet work
-    inference = SNRE_C(prior)
-    proposal = prior
-    theta = proposal.sample((num_sims,))
-    x = simulator(theta)
-    _ = inference.append_simulations(theta, x).train(
-        num_classes=5,
-        gamma=1.0,
-    )
-    posterior = inference.build_posterior()
+def get_SNRE_posterior(prior, simulator, theta=None, x=None, **args):
+    simulator, prior = prepare_for_sbi(simulator, prior)
+    inference = SNRE_B(prior)
+    if theta is None or x is None:
+        theta, x = simulate_for_sbi(simulator, proposal=prior, **args)
+    density_estimator = inference.append_simulations(theta, x).train()
+    posterior = inference.build_posterior(density_estimator)
     return posterior
