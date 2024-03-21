@@ -27,7 +27,7 @@ def true_likelihood(rate: np.ndarray):
     
     # Calculate the Poisson distribution PDF for required ns
     p_Nt = _poisson_pdf(total_rate, np.arange(max_n))
-    p_Nt = _normalise(p_Nt)  # Normalize the Poisson PDF
+    p_Nt = _normalise(p_Nt)  # Normalise the Poisson PDF
 
     lam_tild = np.concatenate((np.zeros(30), rate / total_rate))
     m = len(lam_tild)
@@ -42,7 +42,6 @@ def true_likelihood(rate: np.ndarray):
     
     # Calculate the true likelihood by combining the convolution results with the Poisson probabilities
     v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
-    
     return v
 
 
@@ -78,6 +77,7 @@ class TruePosterior:
         self.spectrum = spectrum
         self.simulator = simulator
 
+
     def compute_true_likelihood(self, params, x0):
         """
         Compute the log likelihood of observing x0 given parameters.
@@ -97,7 +97,8 @@ class TruePosterior:
         prior_prob = self.prior.log_prob(tuple_to_tensor(params))
         likelihood = self.compute_true_likelihood(params, x0)
         return prior_prob + likelihood
-    
+
+
     def compute_grid_posterior(self, x0, grid):
         """
         Compute the posterior of the parameters given observations x0.
@@ -106,6 +107,7 @@ class TruePosterior:
         for i, mu in enumerate(grid):
             posterior[i] = self.compute_posterior(mu, x0)
         return posterior
+
 
     def sample_posterior(self, x0, num_samples, mu_init):
         """

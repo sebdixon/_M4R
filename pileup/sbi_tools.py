@@ -28,7 +28,6 @@ class TruncatedNormal(MultivariateNormal):
             within_bounds = (new_samples >= self.low) & (new_samples <= self.high)
             samples = torch.where(within_bounds, new_samples, samples)
             mask &= ~within_bounds
-            
         return samples
 
 
