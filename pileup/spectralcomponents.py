@@ -59,7 +59,12 @@ class DeltaEmissionLine(SpectralComponent):
         return 2
 
     def get_rate(self, power, mu):
-        return power * np.where(np.round(E_BAR, 2) == np.round(mu, 2), 1, 0)
+        # Need to return a line at the nearest neighbour of mu in E_BAR
+        idx = np.abs(E_BAR - mu).argmin()
+        rate = np.zeros_like(E_BAR)
+        rate[idx] = power
+        return rate
+        
 
 
 class BrokenPowerLaw(SpectralComponent):

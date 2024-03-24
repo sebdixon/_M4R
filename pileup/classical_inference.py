@@ -20,28 +20,30 @@ def true_likelihood(rate: np.ndarray):
     - v: np.ndarray, the calculated true likelihood values.
     """
     # Calculate the total rate across all channels
+    rate = rate @ RMF
     total_rate = np.sum(rate)
-    
+
     # Determine the maximum number of events to consider based on the Poisson distribution
     max_n = _poisson_inverse_cdf(total_rate, 0.01)
-    
+
     # Calculate the Poisson distribution PDF for required ns
     p_Nt = _poisson_pdf(total_rate, np.arange(max_n))
     p_Nt = _normalise(p_Nt)  # Normalise the Poisson PDF
 
     lam_tild = np.concatenate((np.zeros(30), rate / total_rate))
     m = len(lam_tild)
-    
+
     # Initialize conv array
     lam_tild_conv = np.zeros((max_n, m * 2 - 1))
     lam_tild_conv[0, :m] = lam_tild
-    
-    # Perform convolution iteratively for each number of events
+
+    # Convolution iteratively for each number of events
     for n in range(1, max_n):
         lam_tild_conv[n, :m * 2 - 1] = fftconvolve(lam_tild_conv[n - 1, :m], lam_tild, mode='full')[:m * 2 - 1]
-    
+
     # Calculate the true likelihood by combining the convolution results with the Poisson probabilities
-    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
+    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[:1024]
+    v[0] += 1 - np.sum(v[1:])
     return v
 
 
@@ -72,48 +74,59 @@ def tuple_to_tensor(tup):
 
 
 class TruePosterior:
-    def __init__(self, prior, spectrum, simulator):
+    def __init__(self, prior, spectrum, obs):
         self.prior = prior
         self.spectrum = spectrum
-        self.simulator = simulator
+        self.obs = obs
 
-
-    def compute_true_likelihood(self, params, x0):
+    def compute_true_likelihood(self, params):
         """
         Compute the log likelihood of observing x0 given parameters.
         """
-        rate = self.spectrum.get_rate(*params)
+        x0 = self.obs
+        rate = self.spectrum.get_rate(params)
         log_likelihood = np.log(true_likelihood(rate))  # Assuming true_likelihood returns probability values
+        log_likelihood += np.min(log_likelihood)  # Shift the log likelihood to avoid numerical issues
+        print (log_likelihood)
         log_likelihood_of_x0 = 0
         for x in x0:
             log_likelihood_of_x0 += log_likelihood[int(x)]
         return log_likelihood_of_x0
 
 
-    def compute_posterior(self, params, x0):
+    def compute_log_posterior(self, params):
         """
         Compute the posterior of the parameters given observations x0.
         """
-        prior_prob = self.prior.log_prob(tuple_to_tensor(params))
-        likelihood = self.compute_true_likelihood(params, x0)
-        return prior_prob + likelihood
+        log_prior = self.prior.log_prob(tuple_to_tensor(params))
+        log_likelihood = np.log(self.compute_true_likelihood(params))
+        return log_prior + log_likelihood
 
 
-    def compute_grid_posterior(self, x0, grid):
+    def compute_grid_posterior(self, params1, params2, *args):
         """
         Compute the posterior of the parameters given observations x0.
         """
-        posterior = np.zeros(grid.shape)
-        for i, mu in enumerate(grid):
-            posterior[i] = self.compute_posterior(mu, x0)
+        x0 = self.obs
+        if args is not None:
+            print ('Currently not supporting more than 2 parameters')
+            return
+        
+        posterior = np.zeros((len(params1), len(params2)))
+        for i, param1 in enumerate(params1):
+            for j, param2 in enumerate(params2):
+                posterior[i, j] = self.compute_log_posterior((param1, param2), x0)
+        # now normalise so that np.exp(posterior) will sum to 1
+        posterior = np.exp(posterior - np.max(posterior))
         return posterior
 
 
-    def sample_posterior(self, x0, num_samples, mu_init):
+    def sample_posterior(self, num_samples, mu_init):
         """
         Sample from the approximated true posterior given observations x0 using log likelihoods.
         Implements a Metropolis-Hastings proposal to sample with MCMC.
         """
+        x0 = self.obs
         mu_current = mu_init
         posterior_samples = np.zeros((num_samples, int(np.sum(len(mu) for mu in mu_init))))
         log_likelihood_current = self.compute_true_likelihood(mu_current, x0)
@@ -131,32 +144,16 @@ class TruePosterior:
 
 
 if __name__ == '__main__':
-    from spectralcomponents import Spectrum, GaussianEmissionLine, PowerLaw
+    from spectralcomponents import PowerLaw, Spectrum
     from simulators import Simulator
-    from matplotlib import pyplot as plt
-    from time import time
-    c1 = PowerLaw()
-    c1args = (0.1, 1)
-    #c2 = GaussianEmissionLine()
-    #c2args = (0.1, 10, 0.05)
-    spectrum = Spectrum(c1)
-    params = (c1args,)
-    start = time()
-    simulator = Simulator(spectrum, 100000, pileup='bins')  
-    data = simulator(params)
-    print (time() - start)
-    rate = spectrum.get_rate(*params)
-    start = time()
-    true_like = true_likelihood(rate)[:1070]
-    print (time() - start)
-    print (true_like.sum())
-    plt.plot((rate / np.sum(rate) @ RMF), label='likelihood no pileup')
-    plt.plot((true_like / np.sum(true_like) @ RMF), label='likelihood w pielup')
-    plt.hist(data[data>0], bins=50, density=True)
-    plt.legend()
+    from sbi.utils.torchutils import BoxUniform
+    from torch import tensor
 
-    import torch
-    from sbi_tools import BoxUniform
-    prior = BoxUniform(low=torch.tensor([0.01, 0.01]), high=torch.tensor([1, 1]))
-    posterior = TruePosterior(prior, spectrum, simulator)
-    posterior_samples = posterior.sample_posterior(data, 1000, ((0.5, 0.5),))
+    c1 = PowerLaw()
+    spectrum = Spectrum(c1)
+    params = (0.5, 0.3)
+    prior = BoxUniform(low=tensor([0.1, 0.1]), high=tensor([1, 2]))
+    simulator =  Simulator(spectrum, 100, pileup='channels')
+    data = simulator(tensor(params))
+    posterior = TruePosterior(prior, spectrum, data)
+    print (posterior.compute_true_likelihood((0.5, 0.2)))
