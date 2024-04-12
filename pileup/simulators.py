@@ -36,14 +36,14 @@ class Simulator:
         """
         Simulate pileup in bin space.
         """
-        data = np.zeros(self.time_steps)
+        data = np.zeros(self.time_steps) - 1
         total_rate = np.sum(rate)
         rate /= total_rate
         photon_counts = np.random.poisson(total_rate, self.time_steps)
         for time_step, photon_count in enumerate(photon_counts):
             bin_indices = np.nonzero(np.random.multinomial(photon_count, rate))[0] + 1
             total_bin = np.sum(bin_indices) - 1
-            if total_bin >= TOTAL_BINS or total_bin < 0:
+            if total_bin >= TOTAL_BINS:
                 continue
             data_t = np.random.multinomial(1, RMF[total_bin])
             data[time_step] = np.nonzero(data_t)[0]
@@ -51,20 +51,21 @@ class Simulator:
 
     
     def _simulate_channel_pileup(self, rate):
+        # records 0 if no photon recorded / photons sum to greater than total
         channel_indices = np.random.poisson(rate @ RMF, (self.time_steps, TOTAL_CHANNELS)) @ np.arange(1, TOTAL_CHANNELS + 1)
-        channel_indices[channel_indices > TOTAL_CHANNELS] = 1
-        return channel_indices - 1
+        channel_indices[channel_indices > TOTAL_CHANNELS] = 0 #
+        return channel_indices
 
 
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
     from time import time
     c1 = PowerLaw()
-    c1args = (0.9, 1)
+    c1args = (0.2, 1)
     spectrum = Spectrum(c1)
     params = c1args
     start = time()
-    simulator = Simulator(spectrum, 10000, pileup='channels')  
+    simulator = Simulator(spectrum, 100000, pileup='bins')  
     data = simulator(params)
     print (time() - start)
     plt.hist(data, density=True, bins=40)

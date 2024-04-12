@@ -1,10 +1,49 @@
 from copy import copy
 import numpy as np
+import torch
+from tqdm import tqdm
 
 from scipy.signal import fftconvolve
 
 from inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
+
+
+def true_likelihood1(rate: np.ndarray):
+    """
+    Computes the true likelihood for a model in which pileup happens
+    in bin space. This function calculates the likelihood based on the
+    given rate array, representing the intensity of the source in each channel.
+
+    Parameters:
+    - rate: np.ndarray, the rate (lambda) for each channel.
+
+    Returns:
+    - v: np.ndarray, the calculated true likelihood values.
+    """
+    rate = rate @ RMF
+    total_rate = np.sum(rate)
+
+    # determine the maximum number of events to consider based on the Poisson distribution
+    max_n = _poisson_inverse_cdf(total_rate, 0.01)
+
+    # calculate the Poisson distribution PDF for required ns
+    p_Nt = _poisson_pdf(total_rate, np.arange(max_n))
+    p_Nt = _normalise(p_Nt)  # normalise the Poisson PDF
+
+    lam_tild = np.concatenate((np.zeros(30), rate / total_rate))
+    m = len(lam_tild)
+
+    lam_tild_conv = np.zeros((max_n, m))
+    lam_tild_conv[0, :] = lam_tild
+
+    # convolution iteratively for each number of events
+    for n in range(1, max_n):
+        lam_tild_conv[n, :] = fftconvolve(lam_tild_conv[n - 1, :m], lam_tild, mode='full')[:m * 2 - 1]
+        lam_tild_conv[n, :n] = 0
+    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)
+    #v[0] += 1 - np.sum(v[1:])
+    return v.astype(np.float64)
 
 
 def true_likelihood(rate: np.ndarray):
@@ -19,32 +58,30 @@ def true_likelihood(rate: np.ndarray):
     Returns:
     - v: np.ndarray, the calculated true likelihood values.
     """
-    # Calculate the total rate across all channels
     rate = rate @ RMF
     total_rate = np.sum(rate)
 
-    # Determine the maximum number of events to consider based on the Poisson distribution
-    max_n = _poisson_inverse_cdf(total_rate, 0.01)
+    # determine the maximum number of events to consider based on the Poisson distribution
+    max_n = _poisson_inverse_cdf(total_rate, 0.001)
 
-    # Calculate the Poisson distribution PDF for required ns
-    p_Nt = _poisson_pdf(total_rate, np.arange(max_n))
-    p_Nt = _normalise(p_Nt)  # Normalise the Poisson PDF
+    # calculate the Poisson distribution PDF for required ns
+    p_Nt = _poisson_pdf(total_rate, np.arange(max_n + 1))
+    p_Nt = _normalise(p_Nt)  # normalise the Poisson PDF
 
-    lam_tild = np.concatenate((np.zeros(30), rate / total_rate))
+    lam_tild = rate / total_rate
     m = len(lam_tild)
 
-    # Initialize conv array
-    lam_tild_conv = np.zeros((max_n, m * 2 - 1))
-    lam_tild_conv[0, :m] = lam_tild
-
-    # Convolution iteratively for each number of events
-    for n in range(1, max_n):
-        lam_tild_conv[n, :m * 2 - 1] = fftconvolve(lam_tild_conv[n - 1, :m], lam_tild, mode='full')[:m * 2 - 1]
-
-    # Calculate the true likelihood by combining the convolution results with the Poisson probabilities
-    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[:1024]
-    v[0] += 1 - np.sum(v[1:])
-    return v
+    lam_tild_conv = np.zeros((max_n + 1, m))
+    lam_tild_conv[0, :] = lam_tild
+    # convolution iteratively for each number of events
+    for n in range(1, max_n + 1):
+        lam_tild_conv[n, :] = fftconvolve(lam_tild_conv[n - 1, :], lam_tild, mode='same')
+    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)
+    #v0 = p_Nt[0] + (1 - np.sum(lam_tild_conv, axis=1)) @ p_Nt
+    v0 = 1 - np.sum(v) # mthmaticaly equivalent to the above??
+    #print (f"pr no ev {prob_of_no_event}")
+    v = np.concatenate(([v0], v))
+    return v.astype(np.float64)
 
 
 def tensor_to_tuple(tensor):
@@ -85,12 +122,11 @@ class TruePosterior:
         """
         x0 = self.obs
         rate = self.spectrum.get_rate(params)
-        log_likelihood = np.log(true_likelihood(rate))  # Assuming true_likelihood returns probability values
-        log_likelihood += np.min(log_likelihood)  # Shift the log likelihood to avoid numerical issues
-        print (log_likelihood)
-        log_likelihood_of_x0 = 0
-        for x in x0:
-            log_likelihood_of_x0 += log_likelihood[int(x)]
+        likelihood = true_likelihood(rate)
+        
+        log_likelihood_of_x0 = np.sum(np.log(likelihood[x0]))
+        if np.isnan(log_likelihood_of_x0):
+            return -np.inf
         return log_likelihood_of_x0
 
 
@@ -99,48 +135,23 @@ class TruePosterior:
         Compute the posterior of the parameters given observations x0.
         """
         log_prior = self.prior.log_prob(tuple_to_tensor(params))
-        log_likelihood = np.log(self.compute_true_likelihood(params))
-        return log_prior + log_likelihood
+        log_likelihood = self.compute_true_likelihood(params)
+        return log_likelihood + log_prior
 
 
-    def compute_grid_posterior(self, params1, params2, *args):
+    def compute_grid_posterior(self, params1, params2):
         """
         Compute the posterior of the parameters given observations x0.
         """
         x0 = self.obs
-        if args is not None:
-            print ('Currently not supporting more than 2 parameters')
-            return
-        
+
         posterior = np.zeros((len(params1), len(params2)))
-        for i, param1 in enumerate(params1):
+        for i, param1 in enumerate(tqdm(params1, desc='Computing posterior', leave=False)):
             for j, param2 in enumerate(params2):
-                posterior[i, j] = self.compute_log_posterior((param1, param2), x0)
+                posterior[i, j] = self.compute_log_posterior((param1, param2))
         # now normalise so that np.exp(posterior) will sum to 1
         posterior = np.exp(posterior - np.max(posterior))
-        return posterior
-
-
-    def sample_posterior(self, num_samples, mu_init):
-        """
-        Sample from the approximated true posterior given observations x0 using log likelihoods.
-        Implements a Metropolis-Hastings proposal to sample with MCMC.
-        """
-        x0 = self.obs
-        mu_current = mu_init
-        posterior_samples = np.zeros((num_samples, int(np.sum(len(mu) for mu in mu_init))))
-        log_likelihood_current = self.compute_true_likelihood(mu_current, x0)
-        for i in range(num_samples):
-            mu_proposal = self.prior.sample() # torch.Tensor
-            log_likelihood_proposal = self.compute_true_likelihood((tensor_to_tuple(mu_proposal),), x0) # float = log_likelihood(tuple(tuple), np.array)
-            log_likelihood_ratio = log_likelihood_proposal - log_likelihood_current
-            log_prior_ratio = self.prior.log_prob(mu_proposal) - self.prior.log_prob(tuple_to_tensor(mu_current))
-            log_acceptance_ratio = log_likelihood_ratio + log_prior_ratio
-            if np.log(np.random.rand()) < log_acceptance_ratio:
-                mu_current = mu_proposal
-                log_likelihood_current = log_likelihood_proposal  # Update the current log likelihood
-            posterior_samples[i] = np.array(mu_current)
-        return posterior_samples
+        return posterior / np.sum(posterior)
 
 
 if __name__ == '__main__':
@@ -151,9 +162,35 @@ if __name__ == '__main__':
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (0.5, 0.3)
-    prior = BoxUniform(low=tensor([0.1, 0.1]), high=tensor([1, 2]))
-    simulator =  Simulator(spectrum, 100, pileup='channels')
-    data = simulator(tensor(params))
-    posterior = TruePosterior(prior, spectrum, data)
-    print (posterior.compute_true_likelihood((0.5, 0.2)))
+    params = (0.2, 0.5)
+    prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([1, 1]))
+    simulate = Simulator(spectrum, 1000, pileup='channels')
+    data = simulate(tensor(params))
+    print(data)
+    self = TruePosterior(prior, spectrum, data)
+
+    # Generate grids for parameters
+    alpha_grid = np.linspace(0.0, 2, 200)
+    beta_grid = np.linspace(0.0, 2, 200)
+
+    # Compute the posterior over the grid
+    out = self.compute_grid_posterior(alpha_grid, beta_grid)
+
+    # Plotting
+    fig, ax = plt.subplots()
+    cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
+    ax.set_xlabel('Alpha')
+    ax.set_ylabel('Beta')
+
+    # Add a color bar
+    fig.colorbar(cax, ax=ax, label='Posterior Probability')
+
+    # Mark the true parameters
+    true_alpha, true_beta = params
+    # Convert parameter values to indices
+    alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
+    beta_idx = np.argmin(np.abs(beta_grid - true_beta))
+    ax.plot(alpha_grid[alpha_idx], beta_grid[beta_idx], 'ro')
+
+    # Show the plot
+    plt.show()
