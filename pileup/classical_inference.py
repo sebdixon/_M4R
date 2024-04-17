@@ -9,7 +9,7 @@ from inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
 
 
-def true_likelihood1(rate: np.ndarray):
+def true_likelihood_bins(rate: np.ndarray):
     """
     Computes the true likelihood for a model in which pileup happens
     in bin space. This function calculates the likelihood based on the
@@ -21,7 +21,6 @@ def true_likelihood1(rate: np.ndarray):
     Returns:
     - v: np.ndarray, the calculated true likelihood values.
     """
-    rate = rate @ RMF
     total_rate = np.sum(rate)
 
     # determine the maximum number of events to consider based on the Poisson distribution
@@ -39,14 +38,18 @@ def true_likelihood1(rate: np.ndarray):
 
     # convolution iteratively for each number of events
     for n in range(1, max_n):
-        lam_tild_conv[n, :] = fftconvolve(lam_tild_conv[n - 1, :m], lam_tild, mode='full')[:m * 2 - 1]
+        lam_tild_conv[n, :] = fftconvolve(lam_tild_conv[n - 1, :m], lam_tild, mode='same')
         lam_tild_conv[n, :n] = 0
-    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)
+    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
+    v = v.astype(np.float64) @ RMF
     #v[0] += 1 - np.sum(v[1:])
+    v0 = 1 - np.sum(v) # mthmaticaly equivalent to the above??
+    #print (f"pr no ev {prob_of_no_event}")
+    v = np.concatenate(([v0], v))
     return v.astype(np.float64)
 
 
-def true_likelihood(rate: np.ndarray):
+def true_likelihood_channels(rate: np.ndarray):
     """
     Computes the true likelihood for a model in which pileup happens
     in bin space. This function calculates the likelihood based on the
@@ -111,10 +114,11 @@ def tuple_to_tensor(tup):
 
 
 class TruePosterior:
-    def __init__(self, prior, spectrum, obs):
+    def __init__(self, prior, spectrum, obs, pileup='channels'):
         self.prior = prior
         self.spectrum = spectrum
         self.obs = obs
+        self.pileup = pileup
 
     def compute_true_likelihood(self, params):
         """
@@ -122,9 +126,12 @@ class TruePosterior:
         """
         x0 = self.obs
         rate = self.spectrum.get_rate(params)
-        likelihood = true_likelihood(rate)
+        if self.pileup == 'bins':
+            likelihood = true_likelihood_bins(rate)
+        elif self.pileup == 'channels':
+            likelihood = true_likelihood_channels(rate)
         
-        log_likelihood_of_x0 = np.sum(np.log(likelihood[x0]))
+        log_likelihood_of_x0 = np.sum(np.log(likelihood[x0.astype(np.int32)]))
         if np.isnan(log_likelihood_of_x0):
             return -np.inf
         return log_likelihood_of_x0
@@ -162,16 +169,17 @@ if __name__ == '__main__':
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (0.2, 0.5)
-    prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([1, 1]))
-    simulate = Simulator(spectrum, 1000, pileup='channels')
+    params = (0.3, 0.5)
+    prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
+    simulate = Simulator(spectrum, 10, pileup='channels')
     data = simulate(tensor(params))
+    #data = np.ones(1) *600
     print(data)
-    self = TruePosterior(prior, spectrum, data)
+    self = TruePosterior(prior, spectrum, data, pileup='channels')
 
     # Generate grids for parameters
-    alpha_grid = np.linspace(0.0, 2, 200)
-    beta_grid = np.linspace(0.0, 2, 200)
+    alpha_grid = np.linspace(0.05, 2, 20)
+    beta_grid = np.linspace(0.05, 2, 20)
 
     # Compute the posterior over the grid
     out = self.compute_grid_posterior(alpha_grid, beta_grid)
