@@ -9,7 +9,7 @@ from inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
 
 
-def true_likelihood_bins(rate: np.ndarray):
+def true_likelihood_bins(rate: np.ndarray, alpha: float = 0.5):
     """
     Computes the true likelihood for a model in which pileup happens
     in bin space. This function calculates the likelihood based on the
@@ -42,30 +42,19 @@ def true_likelihood_bins(rate: np.ndarray):
         lam_tild_conv[n, :n] = 0
     v = np.sum(lam_tild_conv.T * p_Nt, axis=1)[30:]
     v = v.astype(np.float64) @ RMF
-    #v[0] += 1 - np.sum(v[1:])
     v0 = 1 - np.sum(v) # mthmaticaly equivalent to the above??
     #print (f"pr no ev {prob_of_no_event}")
     v = np.concatenate(([v0], v))
     return v.astype(np.float64)
 
 
-def true_likelihood_channels(rate: np.ndarray):
-    """
-    Computes the true likelihood for a model in which pileup happens
-    in bin space. This function calculates the likelihood based on the
-    given rate array, representing the intensity of the source in each channel.
-
-    Parameters:
-    - rate: np.ndarray, the rate (lambda) for each channel.
-
-    Returns:
-    - v: np.ndarray, the calculated true likelihood values.
-    """
+def true_likelihood_channels(rate: np.ndarray, alpha: float = 0.5):
     rate = rate @ RMF
     total_rate = np.sum(rate)
 
     # determine the maximum number of events to consider based on the Poisson distribution
-    max_n = _poisson_inverse_cdf(total_rate, 0.001)
+    max_n = _poisson_inverse_cdf(total_rate, 0.01)
+    # print (max_n)
 
     # calculate the Poisson distribution PDF for required ns
     p_Nt = _poisson_pdf(total_rate, np.arange(max_n + 1))
@@ -74,16 +63,24 @@ def true_likelihood_channels(rate: np.ndarray):
     lam_tild = rate / total_rate
     m = len(lam_tild)
 
-    lam_tild_conv = np.zeros((max_n + 1, m))
-    lam_tild_conv[0, :] = lam_tild
-    # convolution iteratively for each number of events
+    size_needed = m + (m - 1) * max_n  # Correct maximum size needed
+    lam_tild_conv = np.zeros((max_n + 1, size_needed))
+
+    lam_tild_conv[0, :m] = lam_tild
+
     for n in range(1, max_n + 1):
-        lam_tild_conv[n, :] = fftconvolve(lam_tild_conv[n - 1, :], lam_tild, mode='same')
-    v = np.sum(lam_tild_conv.T * p_Nt, axis=1)
-    #v0 = p_Nt[0] + (1 - np.sum(lam_tild_conv, axis=1)) @ p_Nt
-    v0 = 1 - np.sum(v) # mthmaticaly equivalent to the above??
-    #print (f"pr no ev {prob_of_no_event}")
+        # full convolution expands by (m-1) each step
+        current_result_size = m + (m - 1) * n
+        lam_tild_conv[n, :current_result_size] = fftconvolve(lam_tild_conv[n - 1, :m + (m - 1) * (n - 1)], lam_tild, mode='full')
+        lam_tild_conv[n, :n] = 0
+
+    # extract the valid portion of the convolution
+    valid_convolution = lam_tild_conv[:, :m]
+    alphas = alpha ** np.arange(max_n + 1)
+    v = np.sum(valid_convolution.T * (p_Nt * alphas), axis=1)
+    v0 = 1 - np.sum(v)
     v = np.concatenate(([v0], v))
+
     return v.astype(np.float64)
 
 
@@ -150,15 +147,13 @@ class TruePosterior:
         """
         Compute the posterior of the parameters given observations x0.
         """
-        x0 = self.obs
-
         posterior = np.zeros((len(params1), len(params2)))
         for i, param1 in enumerate(tqdm(params1, desc='Computing posterior', leave=False)):
             for j, param2 in enumerate(params2):
                 posterior[i, j] = self.compute_log_posterior((param1, param2))
         # now normalise so that np.exp(posterior) will sum to 1
         posterior = np.exp(posterior - np.max(posterior))
-        return posterior / np.sum(posterior)
+        return posterior #/ np.sum(posterior)
 
 
 if __name__ == '__main__':
@@ -166,12 +161,13 @@ if __name__ == '__main__':
     from simulators import Simulator
     from sbi.utils.torchutils import BoxUniform
     from torch import tensor
+    from matplotlib import pyplot as plt
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (0.3, 0.5)
+    params = (0.8, 0.5)
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
-    simulate = Simulator(spectrum, 10, pileup='channels')
+    simulate = Simulator(spectrum, 1000, pileup='channels', alpha=0.5)
     data = simulate(tensor(params))
     #data = np.ones(1) *600
     print(data)
@@ -190,7 +186,7 @@ if __name__ == '__main__':
     ax.set_xlabel('Alpha')
     ax.set_ylabel('Beta')
 
-    # Add a color bar
+    # Add a colour bar
     fig.colorbar(cax, ax=ax, label='Posterior Probability')
 
     # Mark the true parameters
