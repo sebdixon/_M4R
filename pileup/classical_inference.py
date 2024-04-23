@@ -57,7 +57,7 @@ def true_likelihood_channels(rate: np.ndarray, alpha: float = 0.5):
     # print (max_n)
 
     # calculate the Poisson distribution PDF for required ns
-    p_Nt = _poisson_pdf(total_rate, np.arange(max_n + 1))
+    p_Nt = _poisson_pdf(total_rate, np.arange(max_n + 2))
     p_Nt = _normalise(p_Nt)  # normalise the Poisson PDF
 
     lam_tild = rate / total_rate
@@ -77,7 +77,7 @@ def true_likelihood_channels(rate: np.ndarray, alpha: float = 0.5):
     # extract the valid portion of the convolution
     valid_convolution = lam_tild_conv[:, :m]
     alphas = alpha ** np.arange(max_n + 1)
-    v = np.sum(valid_convolution.T * (p_Nt * alphas), axis=1)
+    v = np.sum(valid_convolution.T * (p_Nt[1:] * alphas), axis=1)
     v0 = 1 - np.sum(v)
     v = np.concatenate(([v0], v))
 
@@ -127,8 +127,9 @@ class TruePosterior:
             likelihood = true_likelihood_bins(rate)
         elif self.pileup == 'channels':
             likelihood = true_likelihood_channels(rate)
-        
-        log_likelihood_of_x0 = np.sum(np.log(likelihood[x0.astype(np.int32)]))
+        log_likelihood_of_x0 = 0
+        for x in x0:
+            log_likelihood_of_x0 += np.prob(np.log(likelihood[x]))
         if np.isnan(log_likelihood_of_x0):
             return -np.inf
         return log_likelihood_of_x0
@@ -165,9 +166,9 @@ if __name__ == '__main__':
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (0.8, 0.5)
+    params = (0.5, 1.5)
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
-    simulate = Simulator(spectrum, 1000, pileup='channels', alpha=0.5)
+    simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
     data = simulate(tensor(params))
     #data = np.ones(1) *600
     print(data)
