@@ -24,8 +24,8 @@ def true_likelihood_bins(rate: np.ndarray, alpha: float = 0.5):
     total_rate = np.sum(rate)
 
     # determine the maximum number of events to consider based on the Poisson distribution
-    max_n = _poisson_inverse_cdf(total_rate, 0.01)
-
+    #max_n = _poisson_inverse_cdf(total_rate, 0.01)
+    max_n = 5
     # calculate the Poisson distribution PDF for required ns
     p_Nt = _poisson_pdf(total_rate, np.arange(max_n))
     p_Nt = _normalise(p_Nt)  # normalise the Poisson PDF
@@ -129,7 +129,7 @@ class TruePosterior:
             likelihood = true_likelihood_channels(rate)
         log_likelihood_of_x0 = 0
         for x in x0:
-            log_likelihood_of_x0 += np.prob(np.log(likelihood[x]))
+            log_likelihood_of_x0 += np.log(likelihood[x])
         if np.isnan(log_likelihood_of_x0):
             return -np.inf
         return log_likelihood_of_x0
@@ -154,7 +154,7 @@ class TruePosterior:
                 posterior[i, j] = self.compute_log_posterior((param1, param2))
         # now normalise so that np.exp(posterior) will sum to 1
         posterior = np.exp(posterior - np.max(posterior))
-        return posterior #/ np.sum(posterior)
+        return posterior / np.sum(posterior)
 
 
 if __name__ == '__main__':
@@ -166,21 +166,21 @@ if __name__ == '__main__':
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (0.5, 1.5)
+    params = (1.5, 0.8)
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
-    simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
+    simulate = Simulator(spectrum, 1000, pileup='channels', alpha=0.5)
     data = simulate(tensor(params))
     #data = np.ones(1) *600
     print(data)
     self = TruePosterior(prior, spectrum, data, pileup='channels')
 
     # Generate grids for parameters
-    alpha_grid = np.linspace(0.05, 2, 20)
-    beta_grid = np.linspace(0.05, 2, 20)
+    alpha_grid = np.linspace(0.05, 2, 200)
+    beta_grid = np.linspace(0.05, 2, 200)
 
     # Compute the posterior over the grid
-    out = self.compute_grid_posterior(alpha_grid, beta_grid)
-
+    out = self.compute_grid_posterior(alpha_grid, beta_grid).T
+    #out = (alpha_grid[:, np.newaxis] * np.ones_like(beta_grid)[np.newaxis, :]).T
     # Plotting
     fig, ax = plt.subplots()
     cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
@@ -195,7 +195,7 @@ if __name__ == '__main__':
     # Convert parameter values to indices
     alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
     beta_idx = np.argmin(np.abs(beta_grid - true_beta))
-    ax.plot(alpha_grid[alpha_idx], beta_grid[beta_idx], 'ro')
+    ax.plot(alpha_grid[alpha_idx], beta_grid[alpha_idx],  'ro')
 
     # Show the plot
     plt.show()
