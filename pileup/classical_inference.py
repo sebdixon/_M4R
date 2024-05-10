@@ -166,17 +166,17 @@ if __name__ == '__main__':
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
-    params = (1.5, 0.8)
+    params = (0.5, 1.5)
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
-    simulate = Simulator(spectrum, 1000, pileup='channels', alpha=0.5)
+    simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
     data = simulate(tensor(params))
     #data = np.ones(1) *600
     print(data)
     self = TruePosterior(prior, spectrum, data, pileup='channels')
 
     # Generate grids for parameters
-    alpha_grid = np.linspace(0.05, 2, 200)
-    beta_grid = np.linspace(0.05, 2, 200)
+    alpha_grid = np.linspace(0.05, 2, 30)
+    beta_grid = np.linspace(0.05, 2, 30)
 
     # Compute the posterior over the grid
     out = self.compute_grid_posterior(alpha_grid, beta_grid).T
