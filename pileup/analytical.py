@@ -157,6 +157,51 @@ class TruePosterior:
         return posterior / np.sum(posterior)
 
 
+    def find_maximum_likelihood(self, initial_params, bounds):
+        """
+        Find the maximum likelihood parameters given observations x0.
+        """
+        from scipy.optimize import minimize
+        result = minimize(
+            lambda theta: -self.compute_true_likelihood(theta), 
+            initial_params, 
+            method='L-BFGS-B')
+        self.maximum_likelihood = result.x
+        return result.x
+    
+    def sample_with_MCMC(self, true_params):
+        """
+        Sample from the posterior using MCMC.
+        We wish to construct a markov chain which uses the .compute_true_likelihood above.
+        """
+        initial_guess  = self.find_maximum_likelihood(true_params, None)
+        from scipy.stats import multivariate_normal
+        from scipy.optimize import minimize
+        from scipy.stats import uniform
+        from scipy.stats import norm
+        from scipy.stats import poisson
+        from scipy.stats import gamma
+
+        def log_prior(params):
+            return self.prior.log_prob(tuple_to_tensor(params))
+        
+        def log_likelihood(params):
+            return self.compute_true_likelihood(params)
+        
+        def log_posterior(params):
+            return log_prior(params) + log_likelihood(params)
+        
+        def proposal(params):
+            return np.random.normal(params, 0.1)
+        
+        def metropolis_hastings(params, proposal):
+            new_params = proposal(params)
+            log_alpha = log_posterior(new_params) - log_posterior(params)
+            if np.log(np.random.uniform()) < log_alpha:
+                return new_params
+            return params
+        
+
 if __name__ == '__main__':
     from spectralcomponents import PowerLaw, Spectrum
     from simulators import Simulator
@@ -174,28 +219,30 @@ if __name__ == '__main__':
     print(data)
     self = TruePosterior(prior, spectrum, data, pileup='channels')
 
+    
+
     # Generate grids for parameters
-    alpha_grid = np.linspace(0.05, 2, 30)
-    beta_grid = np.linspace(0.05, 2, 30)
+    # alpha_grid = np.linspace(0.05, 2, 30)
+    # beta_grid = np.linspace(0.05, 2, 30)
 
-    # Compute the posterior over the grid
-    out = self.compute_grid_posterior(alpha_grid, beta_grid).T
-    #out = (alpha_grid[:, np.newaxis] * np.ones_like(beta_grid)[np.newaxis, :]).T
-    # Plotting
-    fig, ax = plt.subplots()
-    cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
-    ax.set_xlabel('Alpha')
-    ax.set_ylabel('Beta')
+    # # Compute the posterior over the grid
+    # out = self.compute_grid_posterior(alpha_grid, beta_grid).T
+    # #out = (alpha_grid[:, np.newaxis] * np.ones_like(beta_grid)[np.newaxis, :]).T
+    # # Plotting
+    # fig, ax = plt.subplots()
+    # cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
+    # ax.set_xlabel('Alpha')
+    # ax.set_ylabel('Beta')
 
-    # Add a colour bar
-    fig.colorbar(cax, ax=ax, label='Posterior Probability')
+    # # Add a colour bar
+    # fig.colorbar(cax, ax=ax, label='Posterior Probability')
 
-    # Mark the true parameters
-    true_alpha, true_beta = params
-    # Convert parameter values to indices
-    alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
-    beta_idx = np.argmin(np.abs(beta_grid - true_beta))
-    ax.plot(alpha_grid[alpha_idx], beta_grid[alpha_idx],  'ro')
+    # # Mark the true parameters
+    # true_alpha, true_beta = params
+    # # Convert parameter values to indices
+    # alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
+    # beta_idx = np.argmin(np.abs(beta_grid - true_beta))
+    # ax.plot(alpha_grid[alpha_idx], beta_grid[alpha_idx],  'ro')
 
-    # Show the plot
-    plt.show()
+    # # Show the plot
+    # plt.show()

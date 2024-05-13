@@ -5,7 +5,7 @@ from sbi import analysis as analysis
 from utils.data_formats import timeseries_to_channels
 from simulators import Simulator
 from spectralcomponents import PowerLaw, GaussianEmissionLine, Spectrum
-from sbi.inference import SNPE, SNRE_A, SNLE, prepare_for_sbi, simulate_for_sbi
+from sbi.inference import SNPE, SNRE_A, SNLE_A, SNLE, prepare_for_sbi, simulate_for_sbi
 from sbi.neural_nets.embedding_nets import FCEmbedding
 from sbi_tools import BoxUniform
 from sbi.utils import posterior_nn, likelihood_nn, classifier_nn
@@ -37,7 +37,7 @@ class PosteriorTrainer():
         if prior is None:
             self.prior = BoxUniform(
                 low=torch.tensor([0.1, 0.1]), 
-                high=torch.tensor([1, 2]))
+                high=torch.tensor([2, 2]))
         else:
             self.prior = prior
         self.filepath = filepath
@@ -79,12 +79,12 @@ class PosteriorTrainer():
     def initialise_SNLE(self, mcmc_params):
         self.method = 'SNLE'
         neural_likelihood = likelihood_nn(
-            model="maf",
-            embedding_net=self.embedding_net,
+            model='maf',#self.model,
+            #embedding_net=self.embedding_net,
             hidden_features=200, 
             num_transforms=5
         )
-        self.inference = SNLE(
+        self.inference = SNLE_A(
             prior=self.prior,
             density_estimator=neural_likelihood
         )
@@ -125,7 +125,7 @@ class PosteriorTrainer():
     def save_posterior(self, filepath='', chunk=0):
         if filepath == '':
             raise ValueError('filepath must be passed')
-        torch.save(self.posterior, f'{filepath}/posterior{self.method}_{chunk+1}k_sims.pt')
+        torch.save(self.posterior, f'{filepath}/posterior{self.method}_{chunk}k_sims.pt')
 
 
 def create_reference_posteriors():

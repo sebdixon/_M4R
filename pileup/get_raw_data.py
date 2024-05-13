@@ -14,8 +14,12 @@ def simulate_simple(spectrum, params, n_frames=10000):
     return np.bincount(data, minlength=1025)[1:]
 
 
+def _simulate_simple(params):    
+    return simulate_simple(spectrum, params)
+
+
 def save_simulations_in_chunks_power_law(prior, chunks=10, simulations_per_chunk=1000):
-    simulator, prior = prepare_for_sbi(simulate_simple, prior)
+    simulator, prior = prepare_for_sbi(_simulate_simple, prior)
     for chunk in range(1, chunks+1):
         theta, x = simulate_for_sbi(simulator, prior, num_simulations=simulations_per_chunk)
         np.save(f'simulated_data/power_law/x_chunk{chunk}_power_law.npy', x)
