@@ -2,12 +2,14 @@ import numpy as np
 import torch
 from sbi import utils as utils
 from sbi import analysis as analysis
+from analytical import TruePosterior, adaptive_metropolis_hastings
 from utils.data_formats import timeseries_to_channels
 from simulators import Simulator
 from spectralcomponents import PowerLaw, GaussianEmissionLine, Spectrum
 from sbi.inference import SNPE, SNRE_A, SNLE, prepare_for_sbi, simulate_for_sbi
 from sbi.neural_nets.embedding_nets import FCEmbedding
 from sbi_tools import BoxUniform
+#from sbi.diagnostics import run_sbc, sbc_rank_plot
 from sbi.utils import posterior_nn, likelihood_nn, classifier_nn
 from matplotlib import pyplot as plt
 from get_raw_data import simulate_simple
@@ -16,7 +18,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from sklearn.neural_network import MLPClassifier
 
 
-def evaluate_c2st(true_samples, est_samples, seed=None, n_folds=5):
+def evaluate_c2st(true_samples, est_samples, seed=None, n_folds=5, scoring="accuracy"):
     if torch.is_tensor(true_samples):
         true_samples = true_samples.detach().cpu().numpy()
     if torch.is_tensor(est_samples):
@@ -74,9 +76,32 @@ def evaluate_coverage(
             
             in_interval = (lower_bounds < true_params) \
             & (true_params < upper_bounds)
-            
             total_correct[i] += in_interval
 
     # Normalize to get frequencies
     correct_freq = total_correct / total_trials
     return correct_freq
+
+
+if __name__ == '__main__':
+    est_samples = np.load('simulated_data/power_law/posterior_samples_SNPE_5k_sims.npy')
+    observations = np.load('simulated_data/power_law/x0_power_law.npy')
+    true_params = torch.tensor([0.5, 1.5])
+    prior = BoxUniform(low=torch.tensor([0.0, 0.0]), high=torch.tensor([2, 2]))
+    c1 = PowerLaw()
+    spectrum = Spectrum(c1)
+    params = (0.5, 1.5)
+    prior = BoxUniform(low=torch.tensor([0.0, 0.0]), high=torch.tensor([2, 2]))
+    simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
+    data = simulate(torch.tensor(params))
+    posterior = TruePosterior(prior, spectrum, data, pileup='channels')
+
+    initial_params = np.array([0.5, 1.5])  # Example initial params
+    n_samples = 1000
+    adapt_for = 1000
+
+    true_samples = adaptive_metropolis_hastings(posterior, initial_params, n_samples, adapt_for)
+    true_samples = torch.tensor(true_samples)
+    est_samples = torch.tensor(est_samples)
+    scores = evaluate_c2st(true_samples, est_samples)
+    scores

@@ -117,7 +117,7 @@ class TruePosterior:
         self.obs = obs
         self.pileup = pileup
 
-    def compute_true_likelihood(self, params):
+    def compute_log_likelihood(self, params):
         """
         Compute the log likelihood of observing x0 given parameters.
         """
@@ -140,7 +140,7 @@ class TruePosterior:
         Compute the posterior of the parameters given observations x0.
         """
         log_prior = self.prior.log_prob(tuple_to_tensor(params))
-        log_likelihood = self.compute_true_likelihood(params)
+        log_likelihood = self.compute_log_likelihood(params)
         return log_likelihood + log_prior
 
 
@@ -149,7 +149,8 @@ class TruePosterior:
         Compute the posterior of the parameters given observations x0.
         """
         posterior = np.zeros((len(params1), len(params2)))
-        for i, param1 in enumerate(tqdm(params1, desc='Computing posterior', leave=False)):
+        for i, param1 in enumerate(
+            tqdm(params1, desc='Computing posterior', leave=False)):
             for j, param2 in enumerate(params2):
                 posterior[i, j] = self.compute_log_posterior((param1, param2))
         # now normalise so that np.exp(posterior) will sum to 1
@@ -168,39 +169,56 @@ class TruePosterior:
             method='L-BFGS-B')
         self.maximum_likelihood = result.x
         return result.x
-    
-    def sample_with_MCMC(self, true_params):
-        """
-        Sample from the posterior using MCMC.
-        We wish to construct a markov chain which uses the .compute_true_likelihood above.
-        """
-        initial_guess  = self.find_maximum_likelihood(true_params, None)
-        from scipy.stats import multivariate_normal
-        from scipy.optimize import minimize
-        from scipy.stats import uniform
-        from scipy.stats import norm
-        from scipy.stats import poisson
-        from scipy.stats import gamma
 
-        def log_prior(params):
-            return self.prior.log_prob(tuple_to_tensor(params))
+
+def adaptive_metropolis_hastings(
+        posterior, 
+        initial_params, 
+        n_samples, 
+        adapt_for=1000, 
+        target_accept_rate=0.234):
+    samples = []
+    current_params = initial_params
+    current_posterior = posterior.compute_log_posterior(current_params)
+    proposal_width = 0.2
+    accept_count = 0
+    
+    # Adaptive phase
+    pbar = tqdm(range(adapt_for), desc='Adaptive phase')
+    for i in pbar:
+        proposed_params = current_params + np.random.normal(0, proposal_width, len(initial_params))
+        proposed_posterior = posterior.compute_log_posterior(proposed_params)
         
-        def log_likelihood(params):
-            return self.compute_true_likelihood(params)
+        acceptance_prob = min(1, np.exp(proposed_posterior - current_posterior))
         
-        def log_posterior(params):
-            return log_prior(params) + log_likelihood(params)
+        if np.random.rand() < acceptance_prob:
+            current_params = proposed_params
+            current_posterior = proposed_posterior
+            accept_count += 1
+
+        acceptance_rate = accept_count / (i + 1)
+        proposal_width *= (1 + 0.1 * (acceptance_rate - target_accept_rate))
+        pbar.set_description(f'Adaptive phase - Accept rate: {acceptance_rate:.2f}, Prop width: {proposal_width:.2f}')
+    print (f'Proposal width: {proposal_width}')
+    accept_count = 0
+    
+    pbar = tqdm(total=n_samples, desc='Non-adaptive phase')
+
+    while len(samples) < n_samples:
+        proposed_params = current_params + np.random.normal(0, proposal_width, len(initial_params))
+        proposed_posterior = posterior.compute_log_posterior(proposed_params)
         
-        def proposal(params):
-            return np.random.normal(params, 0.1)
+        acceptance_prob = min(1, np.exp(proposed_posterior - current_posterior))
         
-        def metropolis_hastings(params, proposal):
-            new_params = proposal(params)
-            log_alpha = log_posterior(new_params) - log_posterior(params)
-            if np.log(np.random.uniform()) < log_alpha:
-                return new_params
-            return params
-        
+        if np.random.rand() < acceptance_prob:
+            current_params = proposed_params
+            current_posterior = proposed_posterior
+            accept_count += 1
+            pbar.update(1)
+            samples.append(current_params)
+    
+    return np.array(samples)
+
 
 if __name__ == '__main__':
     from spectralcomponents import PowerLaw, Spectrum
@@ -215,34 +233,36 @@ if __name__ == '__main__':
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
     simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
     data = simulate(tensor(params))
-    #data = np.ones(1) *600
-    print(data)
-    self = TruePosterior(prior, spectrum, data, pileup='channels')
+    posterior = TruePosterior(prior, spectrum, data, pileup='channels')
 
-    
+    initial_params = np.array([0.5, 1.5])  # Example initial params
+    n_samples = 2000
+    adapt_for = 1000
 
-    # Generate grids for parameters
-    # alpha_grid = np.linspace(0.05, 2, 30)
-    # beta_grid = np.linspace(0.05, 2, 30)
+    samples = adaptive_metropolis_hastings(posterior, initial_params, n_samples, adapt_for)
 
-    # # Compute the posterior over the grid
-    # out = self.compute_grid_posterior(alpha_grid, beta_grid).T
-    # #out = (alpha_grid[:, np.newaxis] * np.ones_like(beta_grid)[np.newaxis, :]).T
-    # # Plotting
-    # fig, ax = plt.subplots()
-    # cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
-    # ax.set_xlabel('Alpha')
-    # ax.set_ylabel('Beta')
+    # # Generate grids for parameters
+    alpha_grid = np.linspace(0.4, 0.6, 20)
+    beta_grid = np.linspace(1.4, 1.6, 20)
 
-    # # Add a colour bar
-    # fig.colorbar(cax, ax=ax, label='Posterior Probability')
+    # Compute the posterior over the grid
+    out = posterior.compute_grid_posterior(alpha_grid, beta_grid).T
+    #out = (alpha_grid[:, np.newaxis] * np.ones_like(beta_grid)[np.newaxis, :]).T
+    # Plotting
+    fig, ax = plt.subplots()
+    cax = ax.imshow(out, extent=(alpha_grid.min(), alpha_grid.max(), beta_grid.min(), beta_grid.max()), origin='lower')
+    ax.set_xlabel('Alpha')
+    ax.set_ylabel('Beta')
 
-    # # Mark the true parameters
-    # true_alpha, true_beta = params
-    # # Convert parameter values to indices
-    # alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
-    # beta_idx = np.argmin(np.abs(beta_grid - true_beta))
-    # ax.plot(alpha_grid[alpha_idx], beta_grid[alpha_idx],  'ro')
+    # Add a colour bar
+    fig.colorbar(cax, ax=ax, label='Posterior Probability')
 
-    # # Show the plot
-    # plt.show()
+    # Mark the true parameters
+    true_alpha, true_beta = params
+    # Convert parameter values to indices
+    alpha_idx = np.argmin(np.abs(alpha_grid - true_alpha))
+    beta_idx = np.argmin(np.abs(beta_grid - true_beta))
+    ax.plot(alpha_grid[alpha_idx], beta_grid[alpha_idx],  'ro')
+
+    # Show the plot
+    plt.show()

@@ -76,7 +76,7 @@ class PosteriorTrainer():
             density_estimator=neural_posterior
         )
     
-    def initialise_SNLE(self, mcmc_params):
+    def initialise_SNLE(self):
         self.method = 'SNLE'
         neural_likelihood = likelihood_nn(
             model='maf',#self.model,
@@ -89,11 +89,11 @@ class PosteriorTrainer():
             density_estimator=neural_likelihood
         )
     
-    def initialise_SNRE(self, model_params):
+    def initialise_SNRE(self):
         self.method = 'SNRE'
         classifier = classifier_nn(
             model='resnet',
-            embedding_net_x=self.embedding_net,
+            #embedding_net_x=self.embedding_net,
         )
         self.inference = SNRE_A(
             prior=self.prior,
@@ -137,12 +137,6 @@ def create_reference_posteriors():
             posterior = PosteriorTrainer(
                 method=method,
                 filepath='simulated_data/power_law/',
-                embedding_net=FCEmbedding(
-                    input_dim=1024,
-                    output_dim=100,
-                    num_layers=3,
-                    num_hiddens=1024
-                ),
                 model="nsf",
                 model_params={'hidden_features': 200,
                                 'num_transforms': 5}
@@ -153,4 +147,18 @@ def create_reference_posteriors():
 
 
 if __name__ == "__main__":
-    create_reference_posteriors()
+    #create_reference_posteriors()
+    # simulate reference x0
+    c1 = PowerLaw()
+    spectrum = Spectrum(c1)
+    true_params = torch.tensor([0.5, 1.5])
+    x0 = simulate_simple(spectrum, true_params)
+    np.save('simulated_data/power_law/x0_power_law.npy', x0)
+    # load posteriors
+
+    for method in ['SNPE', 'SNLE', 'SNRE']:
+        for sims in [1, 5, 10]:
+            posterior = torch.load(f'simulated_data/power_law/posterior{method}_{sims}k_sims.pt')
+            posterior.set_default_x(x0)
+            samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
+            np.save(f'simulated_data/power_law/posterior_samples_{method}_{sims}k_sims.npy', samples)
