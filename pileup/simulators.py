@@ -13,7 +13,8 @@ class Simulator:
             in_RMF=None, 
             in_ARF=None, 
             in_ENERGY_BINS=None,
-            alpha=None):
+            alpha=None
+    ):
         self.spectrum = spectrum
         self.time_steps = time_steps
         self.pileup = pileup
@@ -25,7 +26,7 @@ class Simulator:
         self.TOTAL_BINS, self.TOTAL_CHANNELS = self._RMF.shape
         self.grade_migration_param = alpha or 0.5
 
-    def __call__(self, params):
+    def __call__(self, params: np.ndarray) -> np.ndarray:
         """
         Call the simulator with a specified pileup type.
         """
@@ -40,7 +41,7 @@ class Simulator:
             raise ValueError('pileup must be one of "bins", "channels"')
 
 
-    def _simulate_bin_pileup(self, rate):
+    def _simulate_bin_pileup(self, rate: np.ndarray) -> np.ndarray:
         """
         Simulate pileup in bin space.
         """
@@ -58,7 +59,7 @@ class Simulator:
         return data
 
     
-    def _simulate_channel_pileup(self, rate):
+    def _simulate_channel_pileup(self, rate: np.ndarray) -> np.ndarray:
         # records 0 if no photon recorded / photons sum to greater than total
         channel_rate = rate @ self._RMF
         channel_indices = np.random.poisson(

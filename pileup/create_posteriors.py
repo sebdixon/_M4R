@@ -1,22 +1,23 @@
 import numpy as np
 import torch
+import os
+
+from torch import nn
 from sbi import utils as utils
 from sbi import analysis as analysis
-from utils.data_formats import timeseries_to_channels
-from simulators import Simulator
-from spectralcomponents import PowerLaw, GaussianEmissionLine, Spectrum
-from sbi.inference import SNPE, SNRE_A, SNLE_A, SNLE, prepare_for_sbi, simulate_for_sbi
+from pileup.get_raw_data import simulate_simple
+from spectralcomponents import PowerLaw, Spectrum
+from sbi.inference import SNPE, SNRE_A, SNLE_A, DirectPosterior
 from sbi.neural_nets.embedding_nets import FCEmbedding
 from sbi_tools import BoxUniform
 from sbi.utils import posterior_nn, likelihood_nn, classifier_nn
-from matplotlib import pyplot as plt
-from get_raw_data import simulate_simple
 
 
+# Power law globals
 c1 = PowerLaw()
 spectrum = Spectrum(c1)
 
-def save_posterior(inference: SNPE, chunk):
+def save_posterior(inference: SNPE, chunk: int) -> None:
     inference_copy = inference
     _ = inference_copy.train(force_first_round_loss=True)
     torch.manual_seed(0)
@@ -27,13 +28,33 @@ def save_posterior(inference: SNPE, chunk):
 class PosteriorTrainer():
     def __init__(
             self, 
-            method='SNPE', 
-            prior=None,
-            filepath="simulated_data/power_law",
-            embedding_net=None,
-            model="nsf", 
-            model_params=None
-            ):
+            method: str = 'SNPE', 
+            prior: torch.distribution = None,
+            filepath: str = "simulated_data/power_law",
+            embedding_net: str | nn.Module = None,
+            model: str = "nsf", 
+            model_params: tuple | torch.Tensor = None
+    ) -> None:
+        """
+        Posterior trainer class for power law model.
+        Saves posteriors to specified filename. 
+        Posteriors may then be sampled from.
+
+        Parameters
+        ----------
+        method : str
+            Inference method to use. Must be one of 'SNPE', 'SNLE', 'SNRE'.
+        prior : torch.distribution
+            Prior distribution to use.
+        filepath : str
+            Filepath to load data from.
+        embedding_net : str | nn.Module
+            Embedding network to use.
+        model : str
+            Model to use.
+        model_params : tuple | torch.Tensor
+            Model parameters to use.
+        """
         if prior is None:
             self.prior = BoxUniform(
                 low=torch.tensor([0.1, 0.1]), 
@@ -64,7 +85,10 @@ class PosteriorTrainer():
             raise ValueError('method must be one of "SNPE", "SNLE", "SNRE"')
         
 
-    def initialise_SNPE(self, model_params):
+    def initialise_SNPE(
+            self, 
+            model_params: dict
+    ) -> None:
         self.method = 'SNPE'
         neural_posterior = posterior_nn(
             model=self.model,
@@ -76,7 +100,10 @@ class PosteriorTrainer():
             density_estimator=neural_posterior
         )
     
-    def initialise_SNLE(self):
+    def initialise_SNLE(
+            self, 
+            model_params: dict
+    ) -> None:
         self.method = 'SNLE'
         neural_likelihood = likelihood_nn(
             model='maf',#self.model,
@@ -89,18 +116,25 @@ class PosteriorTrainer():
             density_estimator=neural_likelihood
         )
     
-    def initialise_SNRE(self):
+    def initialise_SNRE(
+            self, 
+            model_params: dict
+    ) -> None:
         self.method = 'SNRE'
         classifier = classifier_nn(
             model='resnet',
-            #embedding_net_x=self.embedding_net,
+            embedding_net_x=self.embedding_net,
         )
         self.inference = SNRE_A(
             prior=self.prior,
             classifier=classifier
         )
     
-    def load_data_in_chunks(self, chunks=10, filepath=None):
+    def load_data_in_chunks(
+            self, 
+            chunks: int = 10, 
+            filepath: str = None
+    ) -> None:
         if filepath is None:
             filepath = self.filepath
         for chunk in range(1, chunks + 1):
@@ -110,7 +144,7 @@ class PosteriorTrainer():
             x = torch.Tensor(x)
             self.inference.append_simulations(theta, x)
 
-    def train(self):
+    def train(self) -> DirectPosterior:
         self.load_data_in_chunks()
         self.inference.train()
         if self.method == 'SNLE':
@@ -120,17 +154,25 @@ class PosteriorTrainer():
                 mcmc_method="slice_np_vectorized",
                 mcmc_parameters=mcmc_parameters)
         self.posterior = self.inference.build_posterior()
+        return self.posterior
         
 
-    def save_posterior(self, filepath='', chunk=0):
+    def save_posterior(
+            self,
+            filepath: str = '',
+            chunk: int = 0
+    ) -> None:
         if filepath == '':
             raise ValueError('filepath must be passed')
-        torch.save(self.posterior, f'{filepath}/posterior{self.method}_{chunk}k_sims.pt')
+        torch.save(
+            self.posterior, 
+            f'{filepath}/posterior{self.method}_{chunk}k_sims.pt')
 
 
-def create_reference_posteriors():
-    """Creates posteriors on 1k, 5k and 10k sims
-    for each of NPE, NRE, NLE
+def create_reference_posteriors() -> None:
+    """
+    Create reference posteriors for power law model.
+    Uses prespecified model parameters.
     """
     for method in ['SNLE']:
         for chunk in [1, 5, 10]:
@@ -142,22 +184,27 @@ def create_reference_posteriors():
                                 'num_transforms': 5}
             )
             posterior.load_data_in_chunks(chunks=chunk)
-            posterior.train()
-            posterior.save_posterior(filepath='simulated_data/power_law/', chunk=chunk)
+            _ = posterior.train()
+            posterior.save_posterior(
+                filepath='simulated_data/power_law/', 
+                chunk=chunk)
 
 
 if __name__ == "__main__":
-    #create_reference_posteriors()
+    create_reference_posteriors()
     # simulate reference x0
-    c1 = PowerLaw()
-    spectrum = Spectrum(c1)
-    true_params = torch.tensor([0.5, 1.5])
-    x0 = simulate_simple(spectrum, true_params)
-    np.save('simulated_data/power_law/x0_power_law.npy', x0)
+    # if file doesnt exist already at location
+    if not os.path.exists('simulated_data/power_law/x0_power_law.npy'):
+        c1 = PowerLaw()
+        spectrum = Spectrum(c1)
+        true_params = torch.tensor([0.5, 1.5])
+        x0 = simulate_simple(spectrum, true_params)
+        np.save('simulated_data/power_law/x0_power_law.npy', x0)
+    else:
+        x0 = np.load('simulated_data/power_law/x0_power_law.npy')
     # load posteriors
-
-    for method in ['SNPE', 'SNLE', 'SNRE']:
-        for sims in [1, 5, 10]:
+    for method in ['SNRE']:
+        for sims in [1]: #still need snre 1
             posterior = torch.load(f'simulated_data/power_law/posterior{method}_{sims}k_sims.pt')
             posterior.set_default_x(x0)
             samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
