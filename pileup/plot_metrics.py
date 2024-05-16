@@ -20,26 +20,21 @@ def plot_metrics(
         labels={'Score': metric, 'Samples': 'Number of simulations'}
     )
     # get rid of gridlines
-    fig.update_xaxes(showgrid=False)
-    #fig.update_yaxes(showgrid=True)
+    fig.update_xaxes(
+        showgrid=False,
+        tickvals=[1, 5, 10],
+        ticktext=['1k', '5k', '10k'])
     fig.update_layout(
         title=title,
         xaxis_title='Number of simulations',
-        yaxis_title=metric
-    )
-    fig.update_layout(
-        #plot_bgcolor='white',
-        paper_bgcolor='white'
+        yaxis_title=metric,
+        paper_bgcolor='white',
+        plot_bgcolor='white'
     )
     fig.update_traces(mode='markers+lines')
-    fig.update_xaxes(
-        tickvals=[1, 5, 10],
-        ticktext=['1k', '5k', '10k']
-    )
     if metric == 'c2st':
         fig.update_yaxes(range=[0.5, 1])
     elif metric == 'meddist':
-        #add line at baseline
         baseline_meddist = 97.76758123811723
         fig.add_shape(
             type='line',
