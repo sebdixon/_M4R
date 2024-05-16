@@ -1,7 +1,7 @@
 import numpy as np
 
 from spectralcomponents import Spectrum, PowerLaw, GaussianEmissionLine
-from inputs import RMF, ARF, ENERGY_BINS
+from txt_inputs.inputs import RMF, ARF, ENERGY_BINS
 
 # Prob photon arriving in bin j recorded in channel i
 class Simulator:

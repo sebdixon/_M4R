@@ -1,6 +1,6 @@
 import torch
 
-from sbi_tools import BoxUniform
+from pileup.utils.sbi_tools import BoxUniform
 from spectralcomponents import PowerLaw
 from simulators import Simulator
 from utils.data_formats import timeseries_to_channels

@@ -1,6 +1,7 @@
+import numpy as np
 import pandas as pd
 import plotly.express as px
-import numpy as np
+
 
 def load_df(filename: str) -> pd.DataFrame:
     return pd.read_csv(filename)

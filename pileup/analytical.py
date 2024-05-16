@@ -1,12 +1,11 @@
-from copy import copy
 import numpy as np
 import torch
+from copy import copy
 from tqdm import tqdm
-
 from scipy.signal import fftconvolve
 from scipy.optimize import minimize
 
-from inputs import RMF
+from txt_inputs.inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
 
 
@@ -329,7 +328,6 @@ if __name__ == '__main__':
     from simulators import Simulator
     from sbi.utils.torchutils import BoxUniform
     from torch import tensor
-    from matplotlib import pyplot as plt
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)

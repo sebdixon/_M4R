@@ -5,12 +5,13 @@ import os
 from torch import nn
 from sbi import utils as utils
 from sbi import analysis as analysis
-from pileup.get_raw_data import simulate_simple
-from spectralcomponents import PowerLaw, Spectrum
 from sbi.inference import SNPE, SNRE_A, SNLE_A, DirectPosterior
 from sbi.neural_nets.embedding_nets import FCEmbedding
-from sbi_tools import BoxUniform
 from sbi.utils import posterior_nn, likelihood_nn, classifier_nn
+
+from pileup.get_raw_data import simulate_simple
+from pileup.utils.sbi_tools import BoxUniform
+from spectralcomponents import PowerLaw, Spectrum
 
 
 # Power law globals

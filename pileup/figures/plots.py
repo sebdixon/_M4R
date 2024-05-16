@@ -1,16 +1,27 @@
-from inputs import ARF, RMF, ENERGY_BINS
+import sys
+import os
 
 from matplotlib import pyplot as plt
-
 from matplotlib.colors import LogNorm
-import numpy as np  
+
+parent_dir = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__), '..'
+    )
+)
+sys.path.append(parent_dir)
+
+from txt_inputs.inputs import ARF, RMF, ENERGY_BINS
 
 fig, ax = plt.subplots(figsize=(12, 10))
-
-
-# Adding 0.00001 to avoid log(0) which is undefined
-pcm = ax.imshow(RMF.T + 0.00001, norm=LogNorm(vmin=RMF.min() + 0.00001, vmax=RMF.max()), 
-                origin='lower', aspect='auto', cmap='gray')
+# adding 0.00001 to avoid log(0) which is undefined
+pcm = ax.imshow(
+    RMF.T + 0.00001, 
+    norm=LogNorm(vmin=RMF.min() + 0.00001, vmax=RMF.max()), 
+    origin='lower', 
+    aspect='auto', 
+    cmap='gray'
+)
 
 fig.colorbar(pcm, ax=ax, label='Probability')
 ax.set_title('RMF')
