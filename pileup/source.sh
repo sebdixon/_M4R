@@ -3,12 +3,7 @@
 # chmod +x source.sh
 # ./source.sh
 
-# This script runs the necessary steps for SNPE in base, and
-# simulates the data in ciao. The script is run in the following order:
-# 1. source_ciao.py in ciao
-# 2. source_base.py in base
-# 3. source_ciao.py in ciao
-# 4. source_base.py in base
+set -e # exit if nonzero status
 
 CONDA_PATH="/Users/sebastiandixon/opt/anaconda3"
 VENV_CIAO="ciao"
@@ -18,7 +13,7 @@ SCRIPT_BASE="source_base.py"
 SCRIPT_CIAO="source_ciao.py"
 
 ROUND=1
-NUM_SIMS=10
+NUM_SIMS=1000
 NUM_ROUNDS=10
 
 run_in_ciao() {
@@ -30,7 +25,7 @@ run_in_ciao() {
     conda deactivate
 }
 
-# Function to run a script in the 'base' virtual environment
+
 run_in_base() {
     source $CONDA_PATH/bin/activate $VENV_BASE
     export ROUND

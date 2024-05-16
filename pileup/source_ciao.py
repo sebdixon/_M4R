@@ -75,7 +75,7 @@ def simulate_ciao(round):
         for i in tqdm(range(NUM_SIMS)):
             theta = thetas[i]
             xs[i] = simulate_simple(theta)
-    np.save(f'xspec_outputs/ciao_{round}_x.npy', xs)
+    np.save(f'xspec_outputs/ciao_x_{round}.npy', xs)
 
 if __name__ == '__main__':
     simulate_ciao(ROUND)
