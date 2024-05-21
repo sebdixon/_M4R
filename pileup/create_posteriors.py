@@ -9,14 +9,19 @@ from sbi.inference import SNPE, SNRE_A, SNLE_A, DirectPosterior
 from sbi.neural_nets.embedding_nets import FCEmbedding
 from sbi.utils import posterior_nn, likelihood_nn, classifier_nn
 
-from pileup.get_raw_data import simulate_simple
-from pileup.utils.sbi_tools import BoxUniform
+from get_raw_data import simulate_simple
+from sbi_tools import BoxUniform
 from spectralcomponents import PowerLaw, Spectrum
+from utils.torch_utils import get_device
 
 
 # Power law globals
 c1 = PowerLaw()
 spectrum = Spectrum(c1)
+
+# torch globals
+device = get_device()
+
 
 def save_posterior(inference: SNPE, chunk: int) -> None:
     inference_copy = inference
@@ -30,7 +35,7 @@ class PosteriorTrainer():
     def __init__(
             self, 
             method: str = 'SNPE', 
-            prior: torch.distribution = None,
+            prior = None,
             filepath: str = "simulated_data/power_law",
             embedding_net: str | nn.Module = None,
             model: str = "nsf", 
@@ -107,8 +112,7 @@ class PosteriorTrainer():
     ) -> None:
         self.method = 'SNLE'
         neural_likelihood = likelihood_nn(
-            model='maf',#self.model,
-            #embedding_net=self.embedding_net,
+            model='maf',
             hidden_features=200, 
             num_transforms=5
         )
@@ -125,6 +129,7 @@ class PosteriorTrainer():
         classifier = classifier_nn(
             model='resnet',
             embedding_net_x=self.embedding_net,
+            hidden_features=200,
         )
         self.inference = SNRE_A(
             prior=self.prior,
@@ -170,12 +175,12 @@ class PosteriorTrainer():
             f'{filepath}/posterior{self.method}_{chunk}k_sims.pt')
 
 
-def create_reference_posteriors() -> None:
+def create_estimate_posteriors() -> None:
     """
-    Create reference posteriors for power law model.
+    Create estimate posteriors for power law model.
     Uses prespecified model parameters.
     """
-    for method in ['SNLE']:
+    for method in ['SNRE']:
         for chunk in [1, 5, 10]:
             posterior = PosteriorTrainer(
                 method=method,
@@ -191,8 +196,88 @@ def create_reference_posteriors() -> None:
                 chunk=chunk)
 
 
+def test_architecture(method: str) -> None:
+    """
+    Test architecture for power law model.
+    """
+    if method == 'SNPE':
+        neural_posterior = posterior_nn(
+            model="nsf", 
+            embedding_net=FCEmbedding(
+                input_dim=1024, 
+                output_dim=100, 
+                num_layers=3,
+                num_hiddens=1024
+            ),
+            hidden_features=200,
+            num_transforms=5
+        )
+        prior = BoxUniform(
+            low=torch.tensor([0.1, 0.1]), 
+            high=torch.tensor([50, 50])
+        )
+        inference = SNPE(
+            prior=prior,
+            density_estimator=neural_posterior
+        )
+    elif method == 'SNLE':
+        neural_likelihood = likelihood_nn(
+            model="maf", 
+            embedding_net=FCEmbedding(
+                input_dim=1024, 
+                output_dim=100, 
+                num_layers=3,
+                num_hiddens=1024
+            ),
+            hidden_features=100, 
+            num_transforms=5
+        )
+        prior = BoxUniform(
+            low=torch.tensor([0.1, 0.1]), 
+            high=torch.tensor([2, 2])
+        )
+        inference = SNLE_A(
+            prior=prior,
+            density_estimator=neural_likelihood
+        )
+    elif method == 'SNRE':
+        classifier = classifier_nn(
+            model="resnet", 
+            embedding_net_x=FCEmbedding(
+                input_dim=1024, 
+                output_dim=100, 
+                num_layers=3,
+                num_hiddens=1024
+            ),
+            hidden_features=100
+        )
+        prior = BoxUniform(
+            low=torch.tensor([0.1, 0.1]), 
+            high=torch.tensor([2, 2])
+        )
+        inference = SNRE_A(
+            prior=prior,
+            classifier=classifier
+        )
+    else:
+        raise ValueError('method must be one of "SNPE", "SNLE", "SNRE"')
+    fake_theta = torch.Tensor(np.random.uniform(0.1, 2.0, (10, 2)))
+    fake_x = torch.zeros((10, 1024))
+    for i, fake_theta_i in enumerate(fake_theta):
+        fake_x[i] = torch.Tensor(simulate_simple(spectrum, fake_theta_i))
+    inference.append_simulations(
+        fake_theta,
+        fake_x
+    )
+    try:
+        inference.train()
+    except Exception as e:
+        print(f'FAIL: {e}')
+
+
 if __name__ == "__main__":
-    create_reference_posteriors()
+    #test_architecture('SNRE')
+    #create_estimate_posteriors()
     # simulate reference x0
     # if file doesnt exist already at location
     if not os.path.exists('simulated_data/power_law/x0_power_law.npy'):
@@ -204,8 +289,8 @@ if __name__ == "__main__":
     else:
         x0 = np.load('simulated_data/power_law/x0_power_law.npy')
     # load posteriors
-    for method in ['SNRE']:
-        for sims in [1]: #still need snre 1
+    for method in ['SNPE']:
+        for sims in [1, 5, 10]:
             posterior = torch.load(f'simulated_data/power_law/posterior{method}_{sims}k_sims.pt')
             posterior.set_default_x(x0)
             samples = posterior.sample((1000,), x=x0, show_progress_bars=True)

@@ -12,9 +12,10 @@ VENV_BASE="base"
 SCRIPT_BASE="source_base.py"
 SCRIPT_CIAO="source_ciao.py"
 
-ROUND=7
+ROUND=1
 NUM_SIMS=1000
 NUM_ROUNDS=10
+
 
 run_in_ciao() {
     source $CONDA_PATH/bin/activate $VENV_CIAO
@@ -38,7 +39,8 @@ run_in_base() {
 
 for ((i=1; i<=NUM_ROUNDS; i++))
 do
-    run_in_ciao $SCRIPT_CIAO
     run_in_base $SCRIPT_BASE
     ROUND=$((ROUND + 1))
+    run_in_ciao $SCRIPT_CIAO
+    
 done

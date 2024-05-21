@@ -5,7 +5,7 @@ from sbi import analysis as analysis
 from simulators import Simulator
 from spectralcomponents import PowerLaw, GaussianEmissionLine, Spectrum
 from sbi.inference import prepare_for_sbi, simulate_for_sbi
-from utils.sbi_tools import BoxUniform
+from sbi_tools import BoxUniform
 
 
 def simulate_simple(
@@ -24,7 +24,7 @@ def _simulate_simple(params: np.ndarray) -> np.ndarray:
 
 
 def save_simulations_in_chunks_power_law(
-        prior: torch.distribution, 
+        prior, 
         chunks: int = 10, 
         simulations_per_chunk: int = 1000
 ) -> None:

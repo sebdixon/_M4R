@@ -5,20 +5,16 @@ import sys
 import torch
 import numpy as np
 
-from sbi import utils as utils
-from sbi import analysis as analysis
 from sbi.neural_nets.embedding_nets import FCEmbedding
 from sbi.inference import SNPE
 from sbi.utils import posterior_nn
 
 parent_dir = os.path.abspath(
     os.path.join(
-        os.path.dirname(__file__), '..'
-    )
-)
+        os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 
-from utils.sbi_tools import BoxUniform
+from sbi_tools import BoxUniform
 
 # globals
 ROUND = int(os.getenv('ROUND'))
@@ -78,3 +74,7 @@ if __name__ == '__main__':
     print ('base running round ', ROUND)
     train_ciao(ROUND)
     print('done')
+
+
+    posterior = torch.load(f'xspec_outputs/ciao_posterior_11.pt')
+    

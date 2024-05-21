@@ -1,10 +1,15 @@
 import numpy as np
 import torch
+import pandas as pd
+
 from sbi import utils as utils
 from sbi import analysis as analysis
 from spectralcomponents import PowerLaw, Spectrum
 from sbi.inference import DirectPosterior
-from sbi.diagnostics import run_sbc, sbc_rank_plot
+# diagnostics only in update - need to 
+# rework other stuff before update
+# from sbi.diagnostics import run_sbc, sbc_rank_plot
+
 from get_raw_data import simulate_simple
 from tqdm import tqdm
 from sklearn.model_selection import KFold, cross_val_score
@@ -14,7 +19,7 @@ from sklearn.neural_network import MLPClassifier
 def evaluate_c2st(
         true_samples: np.ndarray | torch.Tensor, 
         est_samples: np.ndarray | torch.Tensor, 
-        seed: int = None, 
+        seed: int = 0, 
         n_folds: int = 5, 
         scoring: str = "accuracy"
 ) -> np.ndarray:
@@ -33,7 +38,7 @@ def evaluate_c2st(
     clf = MLPClassifier(
         activation="relu",
         hidden_layer_sizes=(10 * ndim, 10 * ndim),
-        max_iter=10000,
+        max_iter=100000,
         solver="adam",
         random_state=seed,
     )
@@ -184,10 +189,11 @@ if __name__ == '__main__':
        test_samples_filepaths, 
        reference_samples_filepath, 
        metric)
+    print (scores)
     df = pd.DataFrame({
         'Method': ['NLE']*3 + ['NRE']*3 + ['NPE']*3,
         'Samples': [1, 5, 10]*3,
-        'Score': np.array([score.item() if score.item() > 0.5 else 1 - score.item() for score in dist])
+        'Score': np.array([score.item() if score.item() > 0.5 else 1 - score.item() for score in scores])
     })
     df.to_csv('simulated_data/power_law/c2st_scores.csv', index=False)
 
@@ -198,6 +204,7 @@ if __name__ == '__main__':
         simulate_func=simulate_simple,
         observed_data_filepath=observed_data_filepath,
     )
+    print (dist)
     df = pd.DataFrame({
         'Method': ['NLE']*3 + ['NRE']*3 + ['NPE']*3,
         'Samples': [1, 5, 10]*3,

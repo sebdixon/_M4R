@@ -1,12 +1,14 @@
+from copy import copy
 import numpy as np
 import torch
-from copy import copy
 from tqdm import tqdm
+
 from scipy.signal import fftconvolve
 from scipy.optimize import minimize
 
 from txt_inputs.inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
+from spectralcomponents import Spectrum, PowerLaw
 
 
 def true_likelihood_bins(
@@ -116,11 +118,10 @@ def tuple_to_tensor(tup):
 class TruePosterior:
     def __init__(
             self, 
-            prior: torch.distribution,
+            prior,
             spectrum: Spectrum, 
             obs: np.ndarray, 
             pileup: str = 'channels',
-            representation: str =' timeseries'
     ):
         """
         True posterior class for the pileup model.
@@ -129,13 +130,12 @@ class TruePosterior:
         - spectrum: Spectrum, the spectrum model.
         - obs: np.ndarray, the observed data.
         - pileup: str, the pileup model to use.
-        - representation: str, the representation of the data.
         """
         self.prior = prior
         self.spectrum = spectrum
         self.obs = obs
         self.pileup = pileup
-        self.representation = representation
+
 
     def compute_log_likelihood(self, params: np.ndarray | torch.Tensor) -> float:
         """
@@ -148,12 +148,8 @@ class TruePosterior:
         elif self.pileup == 'channels':
             likelihood = true_likelihood_channels(rate)
         log_likelihood_of_x0 = 0
-        if self.representation == 'timeseries':
-            for x in x0:
-                log_likelihood_of_x0 += np.log(likelihood[x])
-        elif self.representation == 'channels':
-            for i, x in enumerate(x0):
-                log_likelihood_of_x0 += np.log(likelihood[i]) * x
+        for x in x0:
+            log_likelihood_of_x0 += np.log(likelihood[x])
         if np.isnan(log_likelihood_of_x0):
             return -np.inf
         return log_likelihood_of_x0
@@ -276,16 +272,18 @@ def get_true_posterior_samples_power_law(
         prior: torch.distributions.distribution = None,
         spectrum: Spectrum = None,
         pileup: str = 'channels',
-        representation: str = 'timeseries',
         initial_params: np.ndarray | torch.Tensor = None,
         n_samples: int = 1000,
         adapt_for: int = 1000,
         initial_width: float = 0.1,
-        target_accept_rate: float = 0.234
+        target_accept_rate: float = 0.234,
+        total_observed: int = 10000
 ) -> np.ndarray:
     """
     Samples from the true posterior of the power law model using the adaptive
     Metropolis-Hastings algorithm.
+
+    DATA MUST BE IN TIMESERIES FORM.
 
     Parameters:
     - data_filepath: str, the filepath to the observed data.
@@ -293,7 +291,6 @@ def get_true_posterior_samples_power_law(
     - prior: torch.distributions.distribution, the prior distribution over the parameters.
     - spectrum: Spectrum, the spectrum model.
     - pileup: str, the pileup model to use.
-    - representation: str, the representation of the data.
     - initial_params: np.ndarray, the initial parameters to start from.
     - n_samples: int, the number of samples to generate.
     - adapt_for: int, the number of samples to adapt for.
@@ -311,7 +308,8 @@ def get_true_posterior_samples_power_law(
     if initial_params is None:
         initial_params = np.array([0.5, 1.5])
     obs = np.load(data_filepath)
-    posterior = TruePosterior(prior, spectrum, obs, pileup, representation)
+    data = channels_to_timeseries(obs, total_observed)
+    posterior = TruePosterior(prior, spectrum, data, pileup)
     samples = adaptive_metropolis_hastings(
         posterior, 
         initial_params, 
@@ -323,11 +321,31 @@ def get_true_posterior_samples_power_law(
     return samples
 
 
+def channels_to_timeseries(channels: np.ndarray, total_events: int) -> np.ndarray:
+    """
+    Convert a channels representation to a timeseries representation.
+
+    Parameters:
+    - channels: np.ndarray, the channels representation (counts per channel).
+    - total_events: int, the total number of events to be included in the timeseries.
+
+    Returns:
+    - timeseries: np.ndarray, the timeseries representation.
+    """
+    timeseries = np.zeros(total_events, dtype=int)
+    index = 0
+    for i, count in enumerate(channels):
+        timeseries[index:index + count] = i
+        index += count
+    return timeseries
+
+
 if __name__ == '__main__':
     from spectralcomponents import PowerLaw, Spectrum
     from simulators import Simulator
     from sbi.utils.torchutils import BoxUniform
     from torch import tensor
+    from matplotlib import pyplot as plt
 
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
@@ -335,13 +353,13 @@ if __name__ == '__main__':
     prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
     simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
 
+
     get_true_posterior_samples_power_law(
         data_filepath='simulated_data/power_law/x0_power_law.npy',
         save_filepath='simulated_data/power_law/posterior_samples_AMHMCMC.npy',
         prior=prior,
         spectrum=spectrum,
         pileup='channels',
-        representation='timeseries',
         initial_params=params,
         n_samples=1000,
         adapt_for=1000,

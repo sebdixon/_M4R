@@ -17,8 +17,12 @@ from txt_inputs.inputs import process_rmf
 
 
 # globals
-ROUND = int(os.getenv('ROUND'))
-NUM_SIMS = int(os.getenv('NUM_SIMS'))
+if __name__ == '__main__':
+    ROUND = int(os.getenv('ROUND'))
+    NUM_SIMS = int(os.getenv('NUM_SIMS'))
+else:
+    ROUND = 1
+    NUM_SIMS = 1000
 
 RMF = process_rmf(np.loadtxt('xspec_inputs/rmf.txt'))
 ARF = np.loadtxt('xspec_inputs/arf.txt')
@@ -90,3 +94,4 @@ def simulate_ciao(round):
 if __name__ == '__main__':
     simulate_ciao(ROUND)
     print('done')
+    
