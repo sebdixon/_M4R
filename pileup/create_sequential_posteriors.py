@@ -106,10 +106,16 @@ class SequentialPosteriorTrainer(PosteriorTrainer):
         return thetas, xs
     
     def save_posterior_samples(self, theta, chunk):
-        torch.save(theta, f'{self.filepath}/posteriorsequential{self.method}_chunk{chunk}_theta_power_law.pt')
+        torch.save(
+            theta, 
+            f'{self.filepath}/posteriorsequential{self.method}_chunk{chunk}_theta_power_law.pt'
+        )
 
     def save_samples(self, x, chunk):
-        torch.save(x, f'{self.filepath}/sequential{self.method}_chunk{chunk}_x_power_law.pt')
+        torch.save(
+            x, 
+            f'{self.filepath}/sequential{self.method}_chunk{chunk}_x_power_law.pt'
+        )
 
     def get_initial_architecture(self):
         if self.method == 'SNPE':
@@ -147,7 +153,7 @@ def create_estimate_sequential_posteriors():
         num_layers=3,
         num_hiddens=1024
     )
-    for method in ['SNPE', 'SNRE']:
+    for method in ['SNPE',]:
         trainer = SequentialPosteriorTrainer(
             method=method,
             prior=prior,
@@ -160,7 +166,7 @@ def create_estimate_sequential_posteriors():
             n_rounds=10, 
             n_sims=10000,
             save_rounds=[i for i in range(1, 10)])
-        
+
 
 if __name__ == '__main__':
     create_estimate_sequential_posteriors()

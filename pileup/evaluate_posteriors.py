@@ -102,7 +102,11 @@ def evaluate_metric(
         metric = evaluate_c2st
     elif metric == 'coverage':
         metric = evaluate_coverage
-    test_samples = [np.load(filepath) for filepath in test_samples_filepaths]
+    test_samples = [
+        np.load(filepath) if filepath[-4:] == '.npy'
+        else torch.load(filepath).detach().cpu().numpy()
+        for filepath in test_samples_filepaths
+    ]
     reference_sample = np.load(reference_samples_filepath)
     scores = []
     for test_sample in test_samples:
@@ -140,7 +144,11 @@ def evaluate_ppc(
         observed_data_filepath: str,
         simulate_func: callable
 ) -> list[float]:
-    test_samples = [np.load(filepath) for filepath in test_samples_filepaths]
+    test_samples = [
+        np.load(filepath) if filepath[-4:] == '.npy'
+        else torch.load(filepath).detach().cpu().numpy()
+        for filepath in test_samples_filepaths
+    ]
     observed_data = np.load(observed_data_filepath)
     ppcs = []
     for test_sample in test_samples:
@@ -148,7 +156,7 @@ def evaluate_ppc(
     return ppcs
 
 
-def create_dfs(
+def create_amortised_dfs(
         test_samples_filepaths: list[str],
         reference_samples_filepath: str,
         metric: str,
@@ -168,8 +176,7 @@ def create_dfs(
     return df
 
 
-
-if __name__ == '__main__':
+def evaluate_amortised_posteriors():
     test_samples_filepaths = [
         'simulated_data/power_law/posterior_samples_SNLE_1k_sims.npy',
         'simulated_data/power_law/posterior_samples_SNLE_5k_sims.npy',
@@ -219,6 +226,35 @@ if __name__ == '__main__':
     )
     print (baseline_meddist)
 
+
+def evaluate_sequential_posteriors():
+    test_samples_filepaths = [
+        f'simulated_data/power_law/sequential/posteriorsequentialSNPE_chunk{i}_theta_power_law.pt'
+        for i in range(1, 11)
+    ]
+    reference_samples_filepath = 'simulated_data/power_law/posterior_samples_AMHMCMC.npy'
+    observed_data_filepath = 'simulated_data/power_law/x0_power_law.npy'
+
+    metric = 'c2st'
+    scores = evaluate_metric(
+        test_samples_filepaths,
+        reference_samples_filepath,
+        metric
+    )
+    print (scores)
+    df = pd.DataFrame({
+        'Method': ['SNPE']*10,
+        'Chunk': list(range(1, 11)),
+        'Score': np.array([score.item() if score.item() > 0.5 else 1 - score.item() for score in scores])
+    })
+    df.to_csv('simulated_data/power_law/sequential/c2st_scores_SNPE.csv', index=False)
+
+
+
+if __name__ == '__main__':
+    
+    #evaluate_amortised_posteriors()
+    evaluate_sequential_posteriors()
 
 
     import plotly.express as px

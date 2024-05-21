@@ -67,3 +67,9 @@ if __name__ == "__main__":
         metric='meddist', 
         title='PPC median distance for power law model',
         save_path='simulated_data/power_law/plots/meddist_scores.png')
+    df = load_df('simulated_data/power_law/sequential/c2st_scores_SNPE.csv')
+    plot_metrics(
+        df=df, 
+        metric='c2st', 
+        title='Sequential C2ST scores for power law model',
+        save_path='simulated_data/power_law/plots/sequential/c2st_scores_SNPE.png')
