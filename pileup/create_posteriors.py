@@ -71,9 +71,9 @@ class PosteriorTrainer():
         if embedding_net is None:
             self.embedding_net = FCEmbedding(
                 input_dim=1024,
-                output_dim=100,
+                output_dim=10,
                 num_layers=3,
-                num_hiddens=1024
+                num_hiddens=100
             )
         else:
             self.embedding_net = embedding_net
@@ -155,7 +155,7 @@ class PosteriorTrainer():
         self.inference.train()
         if self.method == 'SNLE':
             mcmc_parameters = {"num_chains": 20,
-                   "thin": 5}
+                   "thin": 2}
             self.posterior = self.inference.build_posterior(
                 mcmc_method="slice_np_vectorized",
                 mcmc_parameters=mcmc_parameters)
@@ -172,27 +172,37 @@ class PosteriorTrainer():
             raise ValueError('filepath must be passed')
         torch.save(
             self.posterior, 
-            f'{filepath}/posterior{self.method}_{chunk}k_sims.pt')
+            f'{filepath}posterior{self.method}_{chunk}k_sims.pt')
 
 
-def create_estimate_posteriors() -> None:
+def create_estimate_posteriors(
+        filepath=None,
+        methods=None,
+        chunks=None
+    ) -> None:
     """
     Create estimate posteriors for power law model.
     Uses prespecified model parameters.
     """
-    for method in ['SNRE']:
-        for chunk in [1, 5, 10]:
+    if filepath is None:
+        filepath = 'simulated_data/power_law/'
+    if methods is None:
+        methods = ['SNPE', 'SNLE', 'SNRE']
+    if chunks is None:
+        chunks = [1, 5, 10]
+    for method in methods:
+        for chunk in chunks:
             posterior = PosteriorTrainer(
                 method=method,
-                filepath='simulated_data/power_law/',
-                model="nsf",
+                filepath=filepath,
+                model="maf",
                 model_params={'hidden_features': 200,
                                 'num_transforms': 5}
             )
             posterior.load_data_in_chunks(chunks=chunk)
             _ = posterior.train()
             posterior.save_posterior(
-                filepath='simulated_data/power_law/', 
+                filepath=filepath, 
                 chunk=chunk)
 
 
@@ -277,7 +287,11 @@ def test_architecture(method: str) -> None:
 
 if __name__ == "__main__":
     #test_architecture('SNRE')
-    #create_estimate_posteriors()
+    create_estimate_posteriors(
+        filepath='simulated_data/power_law/v2',
+        methods=['SNPE', 'SNRE'],
+        chunks=[1, 5, 10]
+    )
     # simulate reference x0
     # if file doesnt exist already at location
     if not os.path.exists('simulated_data/power_law/x0_power_law.npy'):
@@ -289,9 +303,28 @@ if __name__ == "__main__":
     else:
         x0 = np.load('simulated_data/power_law/x0_power_law.npy')
     # load posteriors
-    for method in ['SNPE']:
+    for method in ['SNPE', 'SNRE']:
         for sims in [1, 5, 10]:
-            posterior = torch.load(f'simulated_data/power_law/posterior{method}_{sims}k_sims.pt')
+            posterior = torch.load(f'simulated_data/v2/power_law/posterior{method}_{sims}k_sims.pt')
             posterior.set_default_x(x0)
             samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
-            np.save(f'simulated_data/power_law/posterior_samples_{method}_{sims}k_sims.npy', samples)
+            np.save(f'simulated_data/power_law/v2/posterior_samples_{method}_{sims}k_sims.npy', samples)
+
+    for method in ['SNPE', 'SNRE']:
+        for sims in [1, 5, 10]:
+            posterior = torch.load(f'simulated_data/power_law/v2posterior{method}_{sims}k_sims.pt')
+            posterior.set_default_x(x0)
+            samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
+            np.save(f'simulated_data/power_law/v2posterior_samples_{method}_{sims}k_sims.npy', samples)
+
+
+
+    posterior = torch.load('simulated_data/power_law/v2posteriorSNRE_10k_sims.pt')
+    samples = posterior.sample(
+        (10000,), 
+        x=x0, 
+        show_progress_bars=True,
+        thin=1,
+        warmup_steps=1000)
+    analysis.pairplot(samples)
+    samples = np.load('simulated_data/power_law/posterior_samples_AMHMCMC_1.npy')

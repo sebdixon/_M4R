@@ -72,4 +72,16 @@ if __name__ == "__main__":
         df=df, 
         metric='c2st', 
         title='Sequential C2ST scores for power law model',
-        save_path='simulated_data/power_law/plots/sequential/c2st_scores_SNPE.png')
+        save_path='simulated_data/power_law/plots/c2st_scores_SNPE.png')
+    df = load_df('simulated_data/power_law/sequential/meddist_scores_SNPE.csv')
+    plot_metrics(
+        df=df, 
+        metric='meddist', 
+        title='Sequential PPC median distance for power law model',
+        save_path='simulated_data/power_law/plots/meddist_scores_SNPE.png')
+    df = load_df('simulated_data/power_law/v2c2st_scores.csv')
+    plot_metrics(
+        df=df, 
+        metric='c2st', 
+        title='C2ST scores for power law model, lower dim',
+        save_path='simulated_data/power_law/plots/v2c2st_scores.png')

@@ -94,7 +94,8 @@ def true_likelihood_channels(
         lam_tild_conv[n, :current_result_size] = fftconvolve(
             lam_tild_conv[n - 1, :m + (m - 1) * (n - 1)], 
             lam_tild, 
-            mode='full')
+            mode='full'
+        )
         lam_tild_conv[n, :n] = 0
 
     # extract the valid portion of the convolution
@@ -317,8 +318,20 @@ def get_true_posterior_samples_power_law(
         adapt_for, 
         initial_width, 
         target_accept_rate)
-    np.save(save_filepath, samples)
+    save_true_posterior_samples(save_filepath, samples)
     return samples
+
+
+def save_true_posterior_samples(save_filepath: str, samples: np.ndarray):
+    """
+    Shuffles samples and saves to 10 chunks
+    """
+    np.random.shuffle(samples)
+    chunk_size = len(samples) // 10
+    for i in range(10):
+        chunk = samples[i * chunk_size:(i + 1) * chunk_size]
+        np.save(save_filepath.replace('.npy', f'_{i}.npy'), chunk)
+            
 
 
 def channels_to_timeseries(channels: np.ndarray, total_events: int) -> np.ndarray:
@@ -361,7 +374,7 @@ if __name__ == '__main__':
         spectrum=spectrum,
         pileup='channels',
         initial_params=params,
-        n_samples=1000,
+        n_samples=10000,
         adapt_for=1000,
         initial_width=0.1,
         target_accept_rate=0.234)
