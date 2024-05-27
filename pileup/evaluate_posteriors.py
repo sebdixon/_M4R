@@ -114,8 +114,6 @@ def evaluate_metric(
     return scores
 
 
-
-
 def ppc(
         posterior_samples: np.ndarray | torch.Tensor,
         observed_data: np.ndarray | torch.Tensor,
@@ -239,15 +237,15 @@ def ppc_sequential_posteriors(
     return ppcs
 
 
-def evaluate_sequential_posteriors():
+def evaluate_sequential_posteriors(filepath='simulated_data/power_law/sequential'):
     test_samples_filepaths = [
-        f'simulated_data/power_law/sequential/posteriorsequentialSN{algorithm}E_chunk{i}_theta_power_law.pt'
-        for algorithm in ['R', 'P']
+        f'{filepath}/posteriorsequentialSN{algorithm}E_chunk{i}_theta_power_law.pt'
+        for algorithm in ['P']
         for i in range(1, 11)
     ]
     test_simulations_filepaths = [
-        f'simulated_data/power_law/sequential/sequentialSN{algorithm}E_chunk{i}_x_power_law.pt'
-        for algorithm in ['R', 'P']
+        f'{filepath}/sequentialSN{algorithm}E_chunk{i}_x_power_law.pt'
+        for algorithm in ['P']
         for i in range(1, 11)
     ]
     reference_samples_filepath = 'simulated_data/power_law/posterior_samples_AMHMCMC_0.npy'
@@ -261,11 +259,11 @@ def evaluate_sequential_posteriors():
     )
     print (scores)
     df = pd.DataFrame({
-        'Method': ['SNRE']*10 + ['SNPE']*10,
-        'Samples': list(range(1, 11)) * 2,
+        'Method':  ['SNPE']*10,
+        'Samples': list(range(1, 11)),# * 2,
         'Score': np.array([score.item() if score.item() > 0.5 else 1 - score.item() for score in scores])
     })
-    df.to_csv('simulated_data/power_law/sequential/c2st_scores_SNPE.csv', index=False)
+    df.to_csv(f'{filepath}/c2st_scores_SNPE.csv', index=False)
 
 
     dist = ppc_sequential_posteriors(
@@ -273,12 +271,12 @@ def evaluate_sequential_posteriors():
         observed_data_filepath=observed_data_filepath)
     print (dist)
     df = pd.DataFrame({
-        'Method': ['SNRE']*10 + ['SNPE']*10 ,
-        'Samples': list(range(1, 11)) * 2,
+        'Method': ['SNPE']*10 ,
+        'Samples': list(range(1, 11)),# * 2,
         'Score': np.array(dist)
     })
     # save df
-    df.to_csv('simulated_data/power_law/sequential/meddist_scores_SNPE.csv', index=False)
+    df.to_csv(f'{filepath}/meddist_scores_SNPE.csv', index=False)
 
 
 
@@ -308,9 +306,11 @@ def evaluate_amortised_posteriors_v2():
 if __name__ == '__main__':
 
     #evaluate_amortised_posteriors()
-    evaluate_sequential_posteriors()
-
-    evaluate_amortised_posteriors_v2()
+    #evaluate_sequential_posteriors()
+    evaluate_sequential_posteriors(
+        filepath='simulated_data/power_law/sequentialv2'
+    )
+    #evaluate_amortised_posteriors_v2()
 
 
     samples = np.load('simulated_data/power_law/posterior_samples_SNPE_10k_sims.npy')
