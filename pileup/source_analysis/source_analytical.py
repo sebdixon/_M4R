@@ -84,6 +84,5 @@ def get_true_posterior_samples_vapec(
     return samples
 
 if __name__ == '__main__':
-    
     samples = get_true_posterior_samples_vapec()
     print('done')
