@@ -13,6 +13,11 @@ sys.path.append(parent_dir)
 
 from txt_inputs.inputs import ARF, RMF, ENERGY_BINS
 
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif"
+})
+
 fig, ax = plt.subplots(figsize=(12, 10))
 # adding 0.00001 to avoid log(0) which is undefined
 pcm = ax.imshow(

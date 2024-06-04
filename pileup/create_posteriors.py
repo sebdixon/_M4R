@@ -175,7 +175,7 @@ class PosteriorTrainer():
             f'{filepath}posterior{self.method}_{chunk}k_sims.pt')
 
 
-def create_estimate_posteriors(
+def create_estimate_posteriors_v2(
         filepath=None,
         methods=None,
         chunks=None
@@ -206,91 +206,12 @@ def create_estimate_posteriors(
                 chunk=chunk)
 
 
-def test_architecture(method: str) -> None:
-    """
-    Test architecture for power law model.
-    """
-    if method == 'SNPE':
-        neural_posterior = posterior_nn(
-            model="nsf", 
-            embedding_net=FCEmbedding(
-                input_dim=1024, 
-                output_dim=100, 
-                num_layers=3,
-                num_hiddens=1024
-            ),
-            hidden_features=200,
-            num_transforms=5
-        )
-        prior = BoxUniform(
-            low=torch.tensor([0.1, 0.1]), 
-            high=torch.tensor([50, 50])
-        )
-        inference = SNPE(
-            prior=prior,
-            density_estimator=neural_posterior
-        )
-    elif method == 'SNLE':
-        neural_likelihood = likelihood_nn(
-            model="maf", 
-            embedding_net=FCEmbedding(
-                input_dim=1024, 
-                output_dim=100, 
-                num_layers=3,
-                num_hiddens=1024
-            ),
-            hidden_features=100, 
-            num_transforms=5
-        )
-        prior = BoxUniform(
-            low=torch.tensor([0.1, 0.1]), 
-            high=torch.tensor([2, 2])
-        )
-        inference = SNLE_A(
-            prior=prior,
-            density_estimator=neural_likelihood
-        )
-    elif method == 'SNRE':
-        classifier = classifier_nn(
-            model="resnet", 
-            embedding_net_x=FCEmbedding(
-                input_dim=1024, 
-                output_dim=100, 
-                num_layers=3,
-                num_hiddens=1024
-            ),
-            hidden_features=100
-        )
-        prior = BoxUniform(
-            low=torch.tensor([0.1, 0.1]), 
-            high=torch.tensor([2, 2])
-        )
-        inference = SNRE_A(
-            prior=prior,
-            classifier=classifier
-        )
-    else:
-        raise ValueError('method must be one of "SNPE", "SNLE", "SNRE"')
-    fake_theta = torch.Tensor(np.random.uniform(0.1, 2.0, (10, 2)))
-    fake_x = torch.zeros((10, 1024))
-    for i, fake_theta_i in enumerate(fake_theta):
-        fake_x[i] = torch.Tensor(simulate_simple(spectrum, fake_theta_i))
-    inference.append_simulations(
-        fake_theta,
-        fake_x
-    )
-    try:
-        inference.train()
-    except Exception as e:
-        print(f'FAIL: {e}')
-
-
 if __name__ == "__main__":
     #test_architecture('SNRE')
-    create_estimate_posteriors(
+    create_estimate_posteriors_v2(
         filepath='simulated_data/power_law/v2',
-        methods=['SNPE', 'SNRE'],
-        chunks=[1, 5, 10]
+        methods=['SNRE',],
+        chunks=[100]
     )
     # simulate reference x0
     # if file doesnt exist already at location
@@ -303,15 +224,15 @@ if __name__ == "__main__":
     else:
         x0 = np.load('simulated_data/power_law/x0_power_law.npy')
     # load posteriors
-    for method in ['SNPE', 'SNRE']:
-        for sims in [1, 5, 10]:
-            posterior = torch.load(f'simulated_data/v2/power_law/posterior{method}_{sims}k_sims.pt')
-            posterior.set_default_x(x0)
-            samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
-            np.save(f'simulated_data/power_law/v2/posterior_samples_{method}_{sims}k_sims.npy', samples)
+    # for method in ['SNRE']:
+    #     for sims in [100]:
+    #         posterior = torch.load(f'simulated_data/power_law/posterior{method}_{sims}k_sims.pt')
+    #         posterior.set_default_x(x0)
+    #         samples = posterior.sample((10000,), x=x0, show_progress_bars=True)
+    #         np.save(f'simulated_data/power_law/posterior_samples_{method}_{sims}k_sims.npy', samples)
 
-    for method in ['SNPE', 'SNRE']:
-        for sims in [1, 5, 10]:
+    for method in ['SNRE',]:
+        for sims in [100]:
             posterior = torch.load(f'simulated_data/power_law/v2posterior{method}_{sims}k_sims.pt')
             posterior.set_default_x(x0)
             samples = posterior.sample((1000,), x=x0, show_progress_bars=True)
@@ -328,3 +249,5 @@ if __name__ == "__main__":
         warmup_steps=1000)
     analysis.pairplot(samples)
     samples = np.load('simulated_data/power_law/posterior_samples_AMHMCMC_1.npy')
+
+    true_samples = np.load('simulated_data/power_law/posterior_samples_AMHMCMC_0.npy')

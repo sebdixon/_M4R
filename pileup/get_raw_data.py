@@ -25,11 +25,12 @@ def _simulate_simple(params: np.ndarray) -> np.ndarray:
 
 def save_simulations_in_chunks_power_law(
         prior, 
+        start: int = 1,
         chunks: int = 10, 
         simulations_per_chunk: int = 1000
 ) -> None:
     simulator, prior = prepare_for_sbi(_simulate_simple, prior)
-    for chunk in range(1, chunks+1):
+    for chunk in range(start, chunks+1):
         theta, x = simulate_for_sbi(
             simulator, 
             prior, 
@@ -43,4 +44,7 @@ if __name__ == '__main__':
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
     prior = BoxUniform(low=torch.tensor([0.1, 0.1]), high=torch.tensor([2, 2]))
-    save_simulations_in_chunks_power_law(prior)
+    save_simulations_in_chunks_power_law(
+        prior,
+        start=11,
+        chunks=100,)

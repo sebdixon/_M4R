@@ -95,8 +95,13 @@ class SequentialPosteriorTrainer(PosteriorTrainer):
                 x2 = torch.Tensor(np.load('simulated_data/power_law/x_chunk2_power_law.npy'))
                 theta = torch.cat((theta1, theta2), dim=0)
                 x = torch.cat((x1, x2), dim=0)
-                print (x.shape)
-                print (theta.shape)
+            elif i == 0 and sims_per_round == 10000:
+                theta = torch.Tensor(np.load('simulated_data/power_law/theta_chunk1_power_law.npy'))
+                x = torch.Tensor(np.load('simulated_data/power_law/x_chunk1_power_law.npy'))
+                for j in range(2, 11):
+                    theta = torch.cat((theta, torch.Tensor(np.load(f'simulated_data/power_law/theta_chunk{j}_power_law.npy'))), dim=0)
+                    x = torch.cat((x, torch.Tensor(np.load(f'simulated_data/power_law/x_chunk{j}_power_law.npy'))), dim=0)
+                print (theta.shape, x.shape)
             else:
                 theta, x = self.get_data(sims_per_round, proposal)
             if self.method == 'SNPE':
@@ -218,8 +223,34 @@ def create_estimate_sequential_posteriors():
             n_rounds=10, 
             n_sims=20000,
         )
+    
+def create_estimate_sequential_posteriors_v2():
+    prior = BoxUniform(
+        low=torch.tensor([0.1, 0.1]), 
+        high=torch.tensor([2, 2])
+    )
+    embedding_net = FCEmbedding(
+        input_dim=1024, 
+        output_dim=10, 
+        num_layers=3,
+        num_hiddens=200
+    )
+    for method in ['SNPE']:
+        trainer = SequentialPosteriorTrainer(
+            method=method,
+            prior=prior,
+            embedding_net=embedding_net,
+            model="maf",
+            filepath='simulated_data/power_law/sequentialv2',
+            x0=torch.Tensor(np.load('simulated_data/power_law/x0_power_law.npy'))
+        )
+        trainer.train(
+            n_rounds=10, 
+            n_sims=100000,
+        )
 
 
 if __name__ == '__main__':
     create_estimate_sequential_posteriors()
+    create_estimate_sequential_posteriors_v2()
     print('done')

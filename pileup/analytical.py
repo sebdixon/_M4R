@@ -1,10 +1,12 @@
-from copy import copy
 import numpy as np
 import torch
-from tqdm import tqdm
+import numpy as np
 
+
+from tqdm import tqdm
 from scipy.signal import fftconvolve
 from scipy.optimize import minimize
+from copy import copy
 
 from txt_inputs.inputs import RMF
 from utils.pdfs import _poisson_pdf, _normalise, _poisson_inverse_cdf
@@ -26,6 +28,7 @@ def true_likelihood_bins(
     Returns:
     - v: np.ndarray, the calculated true likelihood values.
     """
+    raise NotImplementedError
     total_rate = np.sum(rate)
 
     # determine the maximum number of events to consider based on the Poisson distribution
@@ -73,7 +76,7 @@ def true_likelihood_channels(
     total_rate = np.sum(rate)
 
     # determine the maximum number of events to consider based on the Poisson distribution
-    max_n = _poisson_inverse_cdf(total_rate, 0.01)
+    max_n = _poisson_inverse_cdf(total_rate, 0.0001)
     # print (max_n)
 
     # calculate the Poisson distribution PDF for required ns
@@ -266,6 +269,105 @@ def adaptive_metropolis_hastings(
     return np.array(samples)
 
 
+def adaptive_metropolis_hastings2(
+        posterior: TruePosterior, 
+        initial_params: np.ndarray, 
+        n_samples: int, 
+        adapt_for: int = 1000, 
+        initial_cov: np.ndarray = None,
+        target_accept_rate: float = 0.234,
+        epsilon: float = 1e-6,
+        min_accept_rate: float = 0.1,
+        max_accept_rate: float = 0.5
+) -> np.ndarray:
+    """
+    Adaptive Metropolis-Hastings algorithm for sampling from the posterior.
+
+    Parameters:
+    - posterior: TruePosterior, the true posterior object.
+    - initial_params: np.ndarray, the initial parameters to start from.
+    - n_samples: int, the number of samples to generate.
+    - adapt_for: int, the number of samples to adapt for.
+    - initial_cov: np.ndarray, the initial covariance matrix of the proposal distribution.
+    - target_accept_rate: float, the target acceptance rate.
+    - epsilon: float, regularization term to ensure numerical stability.
+    - min_accept_rate: float, minimum acceptable acceptance rate.
+    - max_accept_rate: float, maximum acceptable acceptance rate.
+
+    Returns:
+    - samples: np.ndarray, the samples from the posterior.
+    """
+    if initial_cov is None:
+        initial_cov = np.eye(len(initial_params)) * 0.01
+
+    samples = []
+    current_params = initial_params
+    current_posterior = posterior.compute_log_posterior(current_params)
+    cov_matrix = initial_cov
+    mean_params = np.zeros_like(initial_params)
+    accept_count = 0
+    d = len(initial_params)
+    s = 2.38**2 / d
+
+    # Adaptive phase
+    pbar = tqdm(range(adapt_for), desc='Adaptive phase')
+    for i in pbar:
+        proposed_params = np.random.multivariate_normal(current_params, cov_matrix)
+        proposed_posterior = posterior.compute_log_posterior(proposed_params)
+        
+        acceptance_prob = min(1, np.exp(proposed_posterior - current_posterior))
+        print (acceptance_prob)
+        if np.random.rand() < acceptance_prob:
+            current_params = proposed_params
+            current_posterior = proposed_posterior
+            accept_count += 1
+
+        samples.append(current_params)
+        acceptance_rate = accept_count / (i + 1)
+        
+        # Update mean
+        old_mean_params = mean_params.copy()
+        mean_params = (mean_params * i + current_params) / (i + 1)
+        
+        # Update covariance matrix
+        if i == 0:
+            cov_matrix = np.outer(current_params - mean_params, current_params - mean_params)
+        else:
+            cov_matrix = ((i - 1) * cov_matrix + (i / (i + 1)) * np.outer(current_params - mean_params, current_params - old_mean_params)) / i
+        
+        # Regularize and scale covariance matrix
+        cov_matrix = s * (cov_matrix + epsilon * np.eye(d))
+        
+        # Ensure covariance matrix does not become excessively large
+        if np.linalg.det(cov_matrix) > 1e2:
+            cov_matrix = np.eye(d) * 0.01
+        
+        # Adjust adaptation rate
+        if acceptance_rate < min_accept_rate:
+            s *= 0.9
+        elif acceptance_rate > max_accept_rate:
+            s *= 1.1
+        
+        pbar.set_description(f'Adaptive phase - Accept rate: {acceptance_rate:.2f}, Scale: {s:.2f}')
+
+    print(f'Final covariance matrix: {cov_matrix}')
+    accept_count = 0
+    pbar = tqdm(total=n_samples, desc='Non-adaptive phase')
+
+    while len(samples) < n_samples:
+        proposed_params = np.random.multivariate_normal(current_params, cov_matrix)
+        proposed_posterior = posterior.compute_log_posterior(proposed_params)
+        
+        acceptance_prob = min(1, np.exp(proposed_posterior - current_posterior))
+        
+        if np.random.rand() < acceptance_prob:
+            current_params = proposed_params
+            current_posterior = proposed_posterior
+            accept_count += 1
+            pbar.update(1)
+            samples.append(current_params)
+    
+    return np.array(samples)
 
 def get_true_posterior_samples_power_law(
         data_filepath: str ='simulated_data/power_law/x0_power_law.npy',
@@ -302,7 +404,7 @@ def get_true_posterior_samples_power_law(
     - samples: np.ndarray, the samples from the posterior.
     """
     if prior is None:
-        prior = BoxUniform(low=torch.tensor([0.0, 0.0]), high=torch.tensor([2, 2]))
+        prior = BoxUniform(low=torch.tensor([0.1, 0.1]), high=torch.tensor([2, 2]))
     if spectrum is None:
         c1 = PowerLaw()
         spectrum = Spectrum(c1)
@@ -363,8 +465,21 @@ if __name__ == '__main__':
     c1 = PowerLaw()
     spectrum = Spectrum(c1)
     params = (0.5, 1.5)
-    prior = BoxUniform(low=tensor([0.0, 0.0]), high=tensor([2, 2]))
+    prior = BoxUniform(low=tensor([0.1, 0.1]), high=tensor([2, 2]))
     simulate = Simulator(spectrum, 10000, pileup='channels', alpha=0.5)
+
+    data = channels_to_timeseries(
+        np.load('simulated_data/power_law/x0_power_law.npy'),
+        10000
+    )
+
+    # adaptive_metropolis_hastings2(
+    #     posterior=TruePosterior(prior, spectrum, data, 'channels'),
+    #     initial_params=params,
+    #     n_samples=10000,
+    #     adapt_for=1000,
+    #     initial_cov=None,
+    # )
 
 
     get_true_posterior_samples_power_law(
@@ -376,5 +491,6 @@ if __name__ == '__main__':
         initial_params=params,
         n_samples=10000,
         adapt_for=1000,
-        initial_width=0.1,
-        target_accept_rate=0.234)
+        initial_width=0.2,
+        target_accept_rate=0.234
+    )

@@ -41,7 +41,7 @@ def get_true_posterior_samples_vapec(
         pileup: str = 'channels',
         representation: str = 'channels',
         initial_params: np.ndarray = None,
-        n_samples: int = 1000,
+        n_samples: int = 10000,
         adapt_for: int = 1000,
         initial_width: float = 0.1,
         target_accept_rate: float = 0.234

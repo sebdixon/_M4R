@@ -65,6 +65,7 @@ class Simulator:
         channel_indices = np.random.poisson(
             channel_rate, (self.time_steps, self.TOTAL_CHANNELS))
         Nt = np.sum(channel_indices, axis=1)
+        print (np.sum(Nt > 1))
         # alpha ^ (Nt-1) is the probability that Nt photons arriving in a time step are recorded as an event
         # in the same time step
         prob_of_no_event = np.random.rand(self.time_steps) > self.grade_migration_param ** (Nt - 1)
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     spectrum = Spectrum(c1)
     params = c1args
     start = time()
-    simulator = Simulator(spectrum, 1000, pileup='channels')  
+    simulator = Simulator(spectrum, 100000, pileup='channels')  
     data = simulator(params)
     print (time() - start)
     plt.hist(data[data>0], density=True, bins=40)
